@@ -214,9 +214,3 @@ class WebQuery:
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)
-
-    
-    
-    
-    
-    
