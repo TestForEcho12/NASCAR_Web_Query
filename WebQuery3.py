@@ -8,6 +8,7 @@ from selenium.common.exceptions import NoSuchElementException
 
 
 class WebQuery:
+    
     def __init__(self, url):
         self.url = url
         
@@ -87,6 +88,11 @@ class WebQuery:
                                     car['car_make']])  
         else:
             sys.exit('An unknown set of JSON dictionary keys are used... Exiting')
+        for driver in self.driver_list:
+            if '(i)' in driver[3]:
+                driver.append(False)
+            else:
+                driver.append(True)
         self.driver_list.sort(key=lambda driver: driver[0])
     
     
@@ -98,33 +104,6 @@ class WebQuery:
             driver[3] = driver[3].replace('* ', '')
             driver[3] = driver[3].replace(' (P)', '')
             self.cln_driver_list.append(driver)
-    
-    
-    def update_driver_DB(self):
-        self.open_browser()
-        self.get_json()
-        self.close_browser()
-        self.get_driver_info()
-        self.clean_driver_list()
-        conn = sqlite3.connect('NASCAR.db')
-        c = conn.cursor()
-        c.execute('CREATE TABLE IF NOT EXISTS Drivers ('
-                    'driver_id INTEGER NOT NULL UNIQUE, '
-                    'driver_name TEXT NOT NULL UNIQUE, '
-                    'PRIMARY KEY(driver_id))')
-        for driver in self.cln_driver_list:
-            c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
-                      (driver[2],))
-            data = c.fetchone()
-            if data == None:
-                c.execute('INSERT INTO Drivers VALUES(?, ?)',
-                          (driver[2], driver[3]))
-                conn.commit()
-                print('{} (ID = {}) was added to the database'
-                      .format(driver[3], driver[2]))
-        print('\nDatabase update complete')
-        c.close()
-        conn.close()
         
         
     def fetch_names_from_DB(self):
@@ -168,7 +147,11 @@ class WebQuery:
         print('------------------------------------------')
         for driver, name in zip(self.driver_list, self.name_list):
             print('{:^4}{:^8}{:22}{:^7}'.format(driver[0], driver[1], name[0], driver[4]))
-    
+
+
+###############################################################################
+# The following are stand alone methods
+###############################################################################    
     
     def query(self):
         self.open_browser()
@@ -177,6 +160,33 @@ class WebQuery:
         self.get_driver_info()
         self.fetch_names_from_DB()
         self.print_results()
+        
+        
+    def update_driver_DB(self):
+        self.open_browser()
+        self.get_json()
+        self.close_browser()
+        self.get_driver_info()
+        self.clean_driver_list()
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        c.execute('CREATE TABLE IF NOT EXISTS Drivers ('
+                    'driver_id INTEGER NOT NULL UNIQUE, '
+                    'driver_name TEXT NOT NULL UNIQUE, '
+                    'PRIMARY KEY(driver_id))')
+        for driver in self.cln_driver_list:
+            c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
+                      (driver[2],))
+            data = c.fetchone()
+            if data == None:
+                c.execute('INSERT INTO Drivers VALUES(?, ?)',
+                          (driver[2], driver[3]))
+                conn.commit()
+                print('{} (ID = {}) was added to the database'
+                      .format(driver[3], driver[2]))
+        print('\nDatabase update complete')
+        c.close()
+        conn.close()
         
     
     def live_race(self, stage_lap=0, refresh=3, results_pause=10, csv_col=(0,)):
@@ -211,6 +221,9 @@ class WebQuery:
                     print('\n' + self.flag_dict[flag_state])
                     print('Laps: {}/{}'.format(lap, total_laps))
                     print('{} laps to go'.format(crit_lap - lap))
+                    self.get_driver_info()
+                    self.fetch_names_from_DB()
+                    self.print_results()
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)
