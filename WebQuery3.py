@@ -5,6 +5,7 @@ import sqlite3
 import csv
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
+from operator import itemgetter
 
 
 class WebQuery:
@@ -56,54 +57,57 @@ class WebQuery:
         #This works for all 'feeds'
         if 'vehicles' in self.json_dict:
             for i, car in enumerate(self.json_dict['vehicles']):
-                self.driver_list.append([car['running_position'],
-                                    car['vehicle_number'],
-                                    car['driver']['driver_id'],
-                                    car['driver']['full_name'],
-                                    car['delta'],
-                                    car['sponsor_name'],
-                                    car['starting_position'],
-                                    car['vehicle_manufacturer']])
+                self.driver_list.append({
+                    'position'      :car['running_position'],
+                    'car number'    :car['vehicle_number'],
+                    'driver id'     :car['driver']['driver_id'],
+                    'driver name'   :car['driver']['full_name'],
+                    'delta'         :car['delta'],
+                    'sponsor'       :car['sponsor_name'],
+                    'qual'          :car['starting_position'],
+                    'manufacturer'  :car['vehicle_manufacturer']})
         #This works for qualifying results
         elif 'driver_name' in self.json_dict[0]:
             for i, car in enumerate(self.json_dict):
-                self.driver_list.append([car['finishing_position'],
-                                    car['car_number'],
-                                    car['driver_id'],
-                                    car['driver_name'],
-                                    car['delta_leader'],
-                                    car['sponsor'],
-                                    car['finishing_position'],
-                                    car['manufacturer']])
+                self.driver_list.append({
+                    'position'      :car['finishing_position'],
+                    'car number'    :car['car_number'],
+                    'driver id'     :car['driver_id'],
+                    'driver name'   :car['driver_name'],
+                    'delta'         :car['delta_leader'],
+                    'sponsor'       :car['sponsor'],
+                    'qual'          :car['finishing_position'],
+                    'manufacturer'  :car['manufacturer']})
         #And this works for race results
         elif 'driver_fullname' in self.json_dict[0]:
             for i, car in enumerate(self.json_dict):
-                self.driver_list.append([car['finishing_position'],
-                                    car['car_number'],
-                                    car['driver_id'],
-                                    car['driver_fullname'],
-                                    car['points_delta'],
-                                    car['sponsor'],
-                                    car['qualifying_position'],
-                                    car['car_make']])  
+                self.driver_list.append({
+                    'position'      :car['finishing_position'],
+                    'car number'    :car['car_number'],
+                    'driver id'     :car['driver_id'],
+                    'driver name'   :car['driver_fullname'],
+                    'delta'         :'N/A',
+                    'sponsor'       :car['sponsor'],
+                    'qual'          :car['qualifying_position'],
+                    'manufacturer'  :car['car_make']})  
         else:
             sys.exit('An unknown set of JSON dictionary keys are used... Exiting')
         for driver in self.driver_list:
-            if '(i)' in driver[3]:
-                driver.append(False)
+            if '(i)' in driver['driver name']:
+                driver['eligible'] = False
             else:
-                driver.append(True)
-        self.driver_list.sort(key=lambda driver: driver[0])
+                driver['eligible'] = True
+        self.driver_list.sort(key=itemgetter('position'))
     
     
     def clean_driver_list(self):
-        self.cln_driver_list = []
+        #self.cln_driver_list = []
         for driver in self.driver_list:
-            driver[3] = driver[3].replace(' #', '')
-            driver[3] = driver[3].replace('(i)', '')
-            driver[3] = driver[3].replace('* ', '')
-            driver[3] = driver[3].replace(' (P)', '')
-            self.cln_driver_list.append(driver)
+            driver['driver name'] = driver['driver name'].replace(' #', '')
+            driver['driver name'] = driver['driver name'].replace('(i)', '')
+            driver['driver name'] = driver['driver name'].replace('* ', '')
+            driver['driver name'] = driver['driver name'].replace(' (P)', '')
+            #self.cln_driver_list.append(driver)
         
         
     def fetch_names_from_DB(self):
@@ -112,7 +116,7 @@ class WebQuery:
         self.name_list = []
         for driver in self.driver_list:
             c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
-                      (driver[2],))
+                      (driver['driver id'],))
             name = c.fetchone()
             if name == None:
                 self.name_list.append(('ID not in database. Run "populate_DB"',))
@@ -146,7 +150,7 @@ class WebQuery:
         print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
         print('------------------------------------------')
         for driver, name in zip(self.driver_list, self.name_list):
-            print('{:^4}{:^8}{:22}{:^7}'.format(driver[0], driver[1], name[0], driver[4]))
+            print('{:^4}{:^8}{:22}{:^7}'.format(driver['position'], driver['car number'], name[0], driver['delta']))
 
 
 ###############################################################################
@@ -174,16 +178,16 @@ class WebQuery:
                     'driver_id INTEGER NOT NULL UNIQUE, '
                     'driver_name TEXT NOT NULL UNIQUE, '
                     'PRIMARY KEY(driver_id))')
-        for driver in self.cln_driver_list:
+        for driver in self.driver_list:
             c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
-                      (driver[2],))
+                      (driver['driver id'],))
             data = c.fetchone()
             if data == None:
                 c.execute('INSERT INTO Drivers VALUES(?, ?)',
-                          (driver[2], driver[3]))
+                          (driver['driver id'], driver['driver name']))
                 conn.commit()
                 print('{} (ID = {}) was added to the database'
-                      .format(driver[3], driver[2]))
+                      .format(driver['driver name'], driver['driver id']))
         print('\nDatabase update complete')
         c.close()
         conn.close()
