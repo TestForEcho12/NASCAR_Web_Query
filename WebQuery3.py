@@ -8,7 +8,7 @@ from selenium.common.exceptions import NoSuchElementException
 from operator import itemgetter
 
 
-class WebQuery:
+class _WebData:
     
     def __init__(self, url):
         self.url = url
@@ -92,15 +92,47 @@ class WebQuery:
                     'manufacturer'  :car['car_make']})  
         else:
             sys.exit('An unknown set of JSON dictionary keys are used... Exiting')
+        # Check eligibility and format 'delta'
         for driver in self.driver_list:
             if '(i)' in driver['driver name']:
                 driver['eligible'] = False
             else:
                 driver['eligible'] = True
+            if driver['delta'] < 0:
+                driver['delta'] = int(driver['delta'])
+            else:
+                driver['delta'] = format(driver['delta'], '.3f')
         self.driver_list.sort(key=itemgetter('position'))
+        
+        
+    def get_race_info(self):
+        self.race_info = {
+            'race id'      :self.json_dict['race_id'],
+            'series id'    :self.json_dict['series_id'],
+            'track id'     :self.json_dict['track_id'],
+            'race name'    :self.json_dict['run_name'],
+            'track name'   :self.json_dict['track_name'],
+            'track length' :self.json_dict['track_length']  
+            }
+        
+        
+    def get_race_status(self):
+        self.race_status = {
+            'lap number'   :self.json_dict['lap_number'],
+            'total laps'   :self.json_dict['laps_in_race'],
+            'laps to go'   :self.json_dict['laps_to_go'],
+            'flag state'   :self.json_dict['flag_state'],
+            'elapsed time' :self.json_dict['elapsed_time'],
+            'time of day'  :self.json_dict['time_of_day'],
+            'cautions'     :self.json_dict['number_of_caution_segments'],
+            'caution laps' :self.json_dict['number_of_caution_laps'],
+            'lead changes' :self.json_dict['number_of_lead_changes'],
+            'leaders'      :self.json_dict['number_of_leaders']
+            }
+        
     
     
-    def clean_driver_list(self):
+    def clean_driver_names(self):
         #self.cln_driver_list = []
         for driver in self.driver_list:
             driver['driver name'] = driver['driver name'].replace(' #', '')
@@ -134,51 +166,78 @@ class WebQuery:
         print('\ncsv. created')
     
     
-    def print_results(self):
+    def print_results(self, driver_only=False):
         print('')
-        if 'run_name' in self.json_dict: print(self.json_dict['run_name'])
-        if 'track_name' in self.json_dict: print(self.json_dict['track_name'])
-        if 'flag_state' in self.json_dict:
-            flag_state = self.json_dict['flag_state']
-            if flag_state in self.flag_dict:
-                print('Flag:', self.flag_dict[flag_state])
-            else:
-                print('Flag', flag_state, 'not defined')
-        if 'lap_number' and 'laps_in_race' in self.json_dict:
-            print('Lap:', self.json_dict['lap_number'], '/',
-                  self.json_dict['laps_in_race'], '\n')
-        print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
-        print('------------------------------------------')
-        for driver, name in zip(self.driver_list, self.name_list):
-            print('{:^4}{:^8}{:22}{:^7}'.format(driver['position'], driver['car number'], name[0], driver['delta']))
+        print(self.race_info['race name'])
+        print(self.race_info['track name'])
+        flag_state = self.race_status['flag state']
+        if flag_state in self.flag_dict:
+            print('Flag:', self.flag_dict[flag_state])
+        else:
+            print('Flag', flag_state, 'not defined')
+        print('Lap:', self.race_status['lap number'], '/',
+              self.race_status['total laps'], '\n')
+        if driver_only == False:
+            print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
+            print('------------------------------------------')
+            for driver, name in zip(self.driver_list, self.name_list):
+                print('{:^4}{:^8}{:22}{:^7}'.format(driver['position'], 
+                      driver['car number'], name[0], driver['delta']))
+        else:
+            for name in self.name_list:
+                print (name[0])    
+                
+                
+    def race_results_to_DB(driver_list):
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
+                  'driver_id INTEGER ,'
+                  'race_id INTEGER,'
+                  'qual INTEGER,'
+                  'pole INTEGER,'    # no boolean values in SQLite. Use 0, 1
+                  'stage1 INTEGER'
+                  'stage2 INTEGER'
+                  'stage3 INTEGER'
+                  'finish INTEGER'
+                  'win INTEGER'        # 0, 1
+                  'eligible INTEGER'   # 0, 1
+                  'encumbered INTEGER' # 0, 1
+                  ')')
+        c.close()
+        conn.close()
 
 
-###############################################################################
-# The following are stand alone methods
-###############################################################################    
+class Query:
     
-    def query(self):
-        self.open_browser()
-        self.get_json()
-        self.close_browser()
-        self.get_driver_info()
-        self.fetch_names_from_DB()
-        self.print_results()
+    def __init__(self, url):
+        self.qry = _WebData(url)
+    
+    
+    def results(self, driver_only=False):
+        self.qry.open_browser()
+        self.qry.get_json()
+        self.qry.close_browser()
+        self.qry.get_driver_info()
+        self.qry.get_race_info()
+        self.qry.get_race_status()
+        self.qry.fetch_names_from_DB()
+        self.qry.print_results(driver_only)
         
         
     def update_driver_DB(self):
-        self.open_browser()
-        self.get_json()
-        self.close_browser()
-        self.get_driver_info()
-        self.clean_driver_list()
+        self.qry.open_browser()
+        self.qry.get_json()
+        self.qry.close_browser()
+        self.qry.get_driver_info()
+        self.qry.clean_driver_names()
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('CREATE TABLE IF NOT EXISTS Drivers ('
                     'driver_id INTEGER NOT NULL UNIQUE, '
                     'driver_name TEXT NOT NULL UNIQUE, '
                     'PRIMARY KEY(driver_id))')
-        for driver in self.driver_list:
+        for driver in self.qry.driver_list:
             c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
                       (driver['driver id'],))
             data = c.fetchone()
@@ -194,40 +253,45 @@ class WebQuery:
         
     
     def live_race(self, stage_lap=0, refresh=3, results_pause=10, csv_col=(0,)):
-        self.open_browser()
+        self.qry.open_browser()
         prev_lap = -1
         prev_flag = -1
         while True:
-            self.refresh_browser()
-            self.get_json()
-            flag_state = self.json_dict['flag_state']
-            lap = self.json_dict['lap_number']
-            total_laps = self.json_dict['laps_in_race']
+            self.qry.refresh_browser()
+            self.qry.get_json()
+            self.qry.get_race_status()
+            
+            flag_state = self.qry.race_status['flag state']
+            lap = self.qry.race_status['lap number']
+            total_laps = self.qry.race_status['total laps']
+            laps_to_go = self.qry.race_status['laps to go']
             if stage_lap == 0:
                 crit_lap = total_laps
             else:
                 crit_lap = stage_lap
             if flag_state != 1 and lap >= crit_lap:
-                print('\n' + self.flag_dict[flag_state])
+                print('\n' + self.qry.flag_dict[flag_state])
                 print('Laps: {}/{}'.format(lap, total_laps))
                 print('Getting Running Order...')
                 time.sleep(results_pause)
-                self.refresh_browser()
-                self.get_json()
-                self.close_browser()
-                self.get_driver_info()
-                self.fetch_names_from_DB()
-                self.print_results()
-                self.name_list_to_csv(col=csv_col)
+                self.qry.refresh_browser()
+                self.qry.get_json()
+                self.qry.close_browser()
+                self.qry.get_driver_info()
+                self.qry.get_race_info()
+                self.qry.get_race_status()
+                self.qry.fetch_names_from_DB()
+                self.qry.print_results(driver_only=False)
+                self.qry.name_list_to_csv(col=csv_col)
                 break
             else:
                 if lap != prev_lap or flag_state != prev_flag:
-                    print('\n' + self.flag_dict[flag_state])
+                    print('\n' + self.qry.flag_dict[flag_state])
                     print('Laps: {}/{}'.format(lap, total_laps))
-                    print('{} laps to go'.format(crit_lap - lap))
-                    self.get_driver_info()
-                    self.fetch_names_from_DB()
-                    self.print_results()
+                    print('{} laps to go'.format(laps_to_go))
+                    self.qry.get_driver_info()
+                    self.qry.fetch_names_from_DB()
+                    self.qry.print_results(driver_only=False)
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)
