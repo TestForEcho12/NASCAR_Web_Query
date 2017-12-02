@@ -23,21 +23,17 @@ class _WebData:
         8: 'Warm Up',
         9: 'Not Active'
         }
-    
-    
+
     def open_browser(self):
         self.browser = webdriver.Chrome(chrome_options=self.chrome_ops)
         self.browser.get(self.url)
-        
-        
+
     def close_browser(self):
         self.browser.quit()
-        
-    
+
     def refresh_browser(self):
         self.browser.refresh()
-        
-    
+
     def get_json(self):
         try: table = self.browser.find_element_by_xpath('/html/body/pre')
         #Exit if there is no table
@@ -50,8 +46,7 @@ class _WebData:
         except json.decoder.JSONDecodeError:    
             self.close_browser()
             sys.exit('Fucking NASCAR.com wont load again')
-    
-    
+
     def get_driver_info(self):
         self.driver_list = []
         #This works for all 'feeds'
@@ -63,6 +58,7 @@ class _WebData:
                     'driver id'     :car['driver']['driver_id'],
                     'driver name'   :car['driver']['full_name'],
                     'delta'         :car['delta'],
+                    'laps led'      :'N/A',
                     'sponsor'       :car['sponsor_name'],
                     'qual'          :car['starting_position'],
                     'manufacturer'  :car['vehicle_manufacturer']})
@@ -75,6 +71,7 @@ class _WebData:
                     'driver id'     :car['driver_id'],
                     'driver name'   :car['driver_name'],
                     'delta'         :car['delta_leader'],
+                    'laps led'      :'N/A',
                     'sponsor'       :car['sponsor'],
                     'qual'          :car['finishing_position'],
                     'manufacturer'  :car['manufacturer']})
@@ -87,6 +84,7 @@ class _WebData:
                     'driver id'     :car['driver_id'],
                     'driver name'   :car['driver_fullname'],
                     'delta'         :'N/A',
+                    'laps led'      :car['laps_led'],
                     'sponsor'       :car['sponsor'],
                     'qual'          :car['qualifying_position'],
                     'manufacturer'  :car['car_make']})  
@@ -103,8 +101,7 @@ class _WebData:
             else:
                 driver['delta'] = format(driver['delta'], '.3f')
         self.driver_list.sort(key=itemgetter('position'))
-        
-        
+
     def get_race_info(self):
         self.race_info = {
             'race id'      :self.json_dict['race_id'],
@@ -114,8 +111,7 @@ class _WebData:
             'track name'   :self.json_dict['track_name'],
             'track length' :self.json_dict['track_length']  
             }
-        
-        
+
     def get_race_status(self):
         self.race_status = {
             'lap number'   :self.json_dict['lap_number'],
@@ -129,8 +125,6 @@ class _WebData:
             'lead changes' :self.json_dict['number_of_lead_changes'],
             'leaders'      :self.json_dict['number_of_leaders']
             }
-        
-    
     
     def clean_driver_names(self):
         #self.cln_driver_list = []
@@ -140,7 +134,6 @@ class _WebData:
             driver['driver name'] = driver['driver name'].replace('* ', '')
             driver['driver name'] = driver['driver name'].replace(' (P)', '')
             #self.cln_driver_list.append(driver)
-        
         
     def fetch_names_from_DB(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -157,15 +150,13 @@ class _WebData:
         c.close()
         conn.close()
     
-    
     def name_list_to_csv(self, col=(0,)):
         self.name_list.insert(0, col)
         with open('results.csv', 'w', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(self.name_list)
         print('\ncsv. created')
-    
-    
+
     def print_results(self, driver_only=False):
         print('')
         print(self.race_info['race name'])
@@ -186,57 +177,27 @@ class _WebData:
         else:
             for name in self.name_list:
                 print (name[0])    
-                
-                
-    def race_results_to_DB(driver_list):
-        conn = sqlite3.connect('NASCAR.db')
-        c = conn.cursor()
-        c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
-                  'driver_id INTEGER ,'
-                  'race_id INTEGER,'
-                  'qual INTEGER,'
-                  'pole INTEGER,'    # no boolean values in SQLite. Use 0, 1
-                  'stage1 INTEGER'
-                  'stage2 INTEGER'
-                  'stage3 INTEGER'
-                  'finish INTEGER'
-                  'win INTEGER'        # 0, 1
-                  'eligible INTEGER'   # 0, 1
-                  'encumbered INTEGER' # 0, 1
-                  ')')
-        c.close()
-        conn.close()
 
-
-class Query:
+class Database:
     
     def __init__(self, url):
         self.qry = _WebData(url)
-    
-    
-    def results(self, driver_only=False):
-        self.qry.open_browser()
-        self.qry.get_json()
-        self.qry.close_browser()
-        self.qry.get_driver_info()
-        self.qry.get_race_info()
-        self.qry.get_race_status()
-        self.qry.fetch_names_from_DB()
-        self.qry.print_results(driver_only)
-        
-        
-    def update_driver_DB(self):
         self.qry.open_browser()
         self.qry.get_json()
         self.qry.close_browser()
         self.qry.get_driver_info()
         self.qry.clean_driver_names()
+        self.qry.get_race_info()
+        self.qry.get_race_status()
+        
+    def update_driver_DB(self):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('CREATE TABLE IF NOT EXISTS Drivers ('
                     'driver_id INTEGER NOT NULL UNIQUE, '
                     'driver_name TEXT NOT NULL UNIQUE, '
-                    'PRIMARY KEY(driver_id))')
+                    'PRIMARY KEY(driver_id)'
+                    ')')
         for driver in self.qry.driver_list:
             c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
                       (driver['driver id'],))
@@ -250,8 +211,56 @@ class Query:
         print('\nDatabase update complete')
         c.close()
         conn.close()
-        
+
+# Change this to initialize
+# other defs will then populate everything else
+# Other stats that need to be added?
+    def race_results_to_DB(self):
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
+                  'driver_id INTEGER,'
+                  'series_id INTEGER,'
+                  'race_id INTEGER,'
+                  'qual INTEGER,'
+                  'pole INTEGER,'    # no boolean values in SQLite. Use 0, 1
+                  'stage1 INTEGER,'
+                  'stage2 INTEGER,'
+                  'stage3 INTEGER,'
+                  'finish INTEGER,'
+                  'laps_led INTEGER,'
+                  'win INTEGER,'        # 0, 1
+                  'eligible INTEGER,'   # 0, 1
+                  'encumbered INTEGER' # 0, 1
+                  ')')
+        for driver in self.qry.driver_list:
+            c.execute('SELECT qual FROM Race_Results WHERE driver_id=? AND race_id=?',
+                      (driver['driver id'], self.qry.race_info['race id']))
+            data = c.fetchone()
+            if data == None:
+                c.execute('INSERT INTO Race_Results(driver_id, series_id, race_id) VALUES(?, ?, ?)',
+                          (driver['driver id'], self.qry.race_info['series id'], self.qry.race_info['race id']))
+                conn.commit()
+        print('Results saved to DB')
+        c.close()
+        conn.close()
+
+
+class Query:
     
+    def __init__(self, url):
+        self.qry = _WebData(url)
+
+    def results(self, driver_only=False):
+        self.qry.open_browser()
+        self.qry.get_json()
+        self.qry.close_browser()
+        self.qry.get_driver_info()
+        self.qry.get_race_info()
+        self.qry.get_race_status()
+        self.qry.fetch_names_from_DB()
+        self.qry.print_results(driver_only)
+
     def live_race(self, stage_lap=0, refresh=3, results_pause=10, csv_col=(0,)):
         self.qry.open_browser()
         prev_lap = -1
