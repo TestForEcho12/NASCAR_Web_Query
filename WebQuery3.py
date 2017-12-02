@@ -59,6 +59,7 @@ class _WebData:
                     'driver name'   :car['driver']['full_name'],
                     'delta'         :car['delta'],
                     'laps led'      :'N/A',
+                    'team'          :'N/A',
                     'sponsor'       :car['sponsor_name'],
                     'qual'          :car['starting_position'],
                     'manufacturer'  :car['vehicle_manufacturer']})
@@ -72,6 +73,7 @@ class _WebData:
                     'driver name'   :car['driver_name'],
                     'delta'         :car['delta_leader'],
                     'laps led'      :'N/A',
+                    'team'          :'N/A',
                     'sponsor'       :car['sponsor'],
                     'qual'          :car['finishing_position'],
                     'manufacturer'  :car['manufacturer']})
@@ -85,21 +87,28 @@ class _WebData:
                     'driver name'   :car['driver_fullname'],
                     'delta'         :'N/A',
                     'laps led'      :car['laps_led'],
+                    'team'          :car['team_name'],
                     'sponsor'       :car['sponsor'],
                     'qual'          :car['qualifying_position'],
                     'manufacturer'  :car['car_make']})  
         else:
             sys.exit('An unknown set of JSON dictionary keys are used... Exiting')
-        # Check eligibility and format 'delta'
+            
+        # Check eligibility, pole, and format 'delta'
         for driver in self.driver_list:
             if '(i)' in driver['driver name']:
-                driver['eligible'] = False
+                driver['eligible'] = 0
             else:
-                driver['eligible'] = True
+                driver['eligible'] = 1
             if driver['delta'] < 0:
                 driver['delta'] = int(driver['delta'])
             else:
                 driver['delta'] = format(driver['delta'], '.3f')
+            if driver['qual'] == 1:
+                driver['pole'] = 1
+            else:
+                driver['pole'] = 0
+                
         self.driver_list.sort(key=itemgetter('position'))
 
     def get_race_info(self):
@@ -127,13 +136,11 @@ class _WebData:
             }
     
     def clean_driver_names(self):
-        #self.cln_driver_list = []
         for driver in self.driver_list:
             driver['driver name'] = driver['driver name'].replace(' #', '')
             driver['driver name'] = driver['driver name'].replace('(i)', '')
             driver['driver name'] = driver['driver name'].replace('* ', '')
             driver['driver name'] = driver['driver name'].replace(' (P)', '')
-            #self.cln_driver_list.append(driver)
         
     def fetch_names_from_DB(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -199,10 +206,10 @@ class Database:
                     'PRIMARY KEY(driver_id)'
                     ')')
         for driver in self.qry.driver_list:
-            c.execute('SELECT driver_name FROM Drivers WHERE driver_id=?',
+            c.execute('SELECT EXISTS(SELECT driver_name FROM Drivers WHERE driver_id=?)',
                       (driver['driver id'],))
             data = c.fetchone()
-            if data == None:
+            if data[0] == 0:
                 c.execute('INSERT INTO Drivers VALUES(?, ?)',
                           (driver['driver id'], driver['driver name']))
                 conn.commit()
@@ -212,10 +219,12 @@ class Database:
         c.close()
         conn.close()
 
-# Change this to initialize
 # other defs will then populate everything else
 # Other stats that need to be added?
-    def race_results_to_DB(self):
+        
+# DNF?
+
+    def init_race_results_DB(self):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
@@ -223,7 +232,7 @@ class Database:
                   'series_id INTEGER,'
                   'race_id INTEGER,'
                   'qual INTEGER,'
-                  'pole INTEGER,'    # no boolean values in SQLite. Use 0, 1
+                  'pole INTEGER,'       # 0, 1
                   'stage1 INTEGER,'
                   'stage2 INTEGER,'
                   'stage3 INTEGER,'
@@ -231,17 +240,47 @@ class Database:
                   'laps_led INTEGER,'
                   'win INTEGER,'        # 0, 1
                   'eligible INTEGER,'   # 0, 1
-                  'encumbered INTEGER' # 0, 1
+                  'encumbered INTEGER,' # 0, 1
+                  'car_number INTEGER,'
+                  'manufacturer TEXT,'
+                  'team TEXT,'
+                  'sponsor TEXT'
                   ')')
         for driver in self.qry.driver_list:
-            c.execute('SELECT qual FROM Race_Results WHERE driver_id=? AND race_id=?',
+            c.execute('SELECT EXISTS(SELECT * FROM Race_Results WHERE driver_id=? AND race_id=?)', 
                       (driver['driver id'], self.qry.race_info['race id']))
             data = c.fetchone()
-            if data == None:
-                c.execute('INSERT INTO Race_Results(driver_id, series_id, race_id) VALUES(?, ?, ?)',
-                          (driver['driver id'], self.qry.race_info['series id'], self.qry.race_info['race id']))
+            if data[0] == 0:
+                c.execute('INSERT INTO Race_Results(driver_id, series_id, race_id, qual,'
+                                                    'pole, eligible, encumbered, car_number,'
+                                                    'manufacturer, sponsor)'
+                                                    'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                          (driver['driver id'], self.qry.race_info['series id'], 
+                           self.qry.race_info['race id'], driver['qual'], driver['pole'],
+                           driver['eligible'], 0, driver['car number'], 
+                           driver['manufacturer'], driver['sponsor'])
+                          )
                 conn.commit()
         print('Results saved to DB')
+        c.close()
+        conn.close()
+        
+    def update_results_DB(self, stage):
+        
+        stages = {
+                0: 'finish',
+                1: 'stage1',
+                2: 'stage2',
+                3: 'stage3'
+                }
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()     
+        for driver in self.qry.driver_list:
+            c.execute('UPDATE Race_Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+                      (driver['position'], driver['driver id'], self.qry.race_info['race id']))
+        
+            conn.commit()
+        print('Results updated in DB')
         c.close()
         conn.close()
 
