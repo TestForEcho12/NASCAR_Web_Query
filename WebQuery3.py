@@ -8,9 +8,22 @@ from selenium.common.exceptions import NoSuchElementException
 from operator import itemgetter
 
 
-class _WebData:
+class WebData:
     
-    def __init__(self, url):
+    def __init__(self, year, series_id, race_id, feed_type):
+        #'https://www.nascar.com/live/feeds/series_2/4627/live-feed.json'
+        #'https://www.nascar.com/live/feeds/series_2/4636/stage1-feed.json'
+        #'https://www.nascar.com/cacher/2017/2/4636/qualification.json'
+        #'https://www.nascar.com/cacher/2017/2/4636/raceResults.json'
+        feeds = {
+            0: 'live-feed',
+            1: 'stage1-feed',
+            2: 'stage2-feed',
+            3: 'stage3-feed',
+            }
+        self.feed = feeds[feed_type]
+        url = 'https://www.nascar.com/live/feeds/series_{}/{}/{}.json'.format(
+              series_id, race_id, self.feed)
         self.url = url
         
     chrome_ops = webdriver.ChromeOptions()
@@ -49,69 +62,42 @@ class _WebData:
 
     def get_driver_info(self):
         self.driver_list = []
-        #This works for all 'feeds'
-        if 'vehicles' in self.json_dict:
-            for i, car in enumerate(self.json_dict['vehicles']):
-                self.driver_list.append({
-                    'position'      :car['running_position'],
-                    'car number'    :car['vehicle_number'],
-                    'driver id'     :car['driver']['driver_id'],
-                    'driver name'   :car['driver']['full_name'],
-                    'delta'         :car['delta'],
-                    'laps led'      :'N/A',
-                    'team'          :'N/A',
-                    'sponsor'       :car['sponsor_name'],
-                    'qual'          :car['starting_position'],
-                    'manufacturer'  :car['vehicle_manufacturer']})
-        #This works for qualifying results
-        elif 'driver_name' in self.json_dict[0]:
-            for i, car in enumerate(self.json_dict):
-                self.driver_list.append({
-                    'position'      :car['finishing_position'],
-                    'car number'    :car['car_number'],
-                    'driver id'     :car['driver_id'],
-                    'driver name'   :car['driver_name'],
-                    'delta'         :car['delta_leader'],
-                    'laps led'      :'N/A',
-                    'team'          :'N/A',
-                    'sponsor'       :car['sponsor'],
-                    'qual'          :car['finishing_position'],
-                    'manufacturer'  :car['manufacturer']})
-        #And this works for race results
-        elif 'driver_fullname' in self.json_dict[0]:
-            for i, car in enumerate(self.json_dict):
-                self.driver_list.append({
-                    'position'      :car['finishing_position'],
-                    'car number'    :car['car_number'],
-                    'driver id'     :car['driver_id'],
-                    'driver name'   :car['driver_fullname'],
-                    'delta'         :'N/A',
-                    'laps led'      :car['laps_led'],
-                    'team'          :car['team_name'],
-                    'sponsor'       :car['sponsor'],
-                    'qual'          :car['qualifying_position'],
-                    'manufacturer'  :car['car_make']})  
-        else:
-            sys.exit('An unknown set of JSON dictionary keys are used... Exiting')
-            
+        for i, car in enumerate(self.json_dict['vehicles']):
+            laps_led = 0
+            for led in car['laps_led']:
+                if not led['end_lap'] == 0:       # Eliminates situation where pole winner doesn't lead first lap
+                    laps_led += led['end_lap'] - led['start_lap'] + 1
+            self.driver_list.append({
+                'position'      :car['running_position'],
+                'laps led'      :laps_led,
+                'car number'    :car['vehicle_number'],
+                'driver id'     :car['driver']['driver_id'],
+                'driver name'   :car['driver']['full_name'],
+                'delta'         :car['delta'],
+                'sponsor'       :car['sponsor_name'],
+                'qual'          :car['starting_position'],
+                'manufacturer'  :car['vehicle_manufacturer']})
+
         # Check eligibility, pole, and format 'delta'
         for driver in self.driver_list:
             if '(i)' in driver['driver name']:
-                driver['eligible'] = 0
+                driver['ineligible'] = 1
             else:
-                driver['eligible'] = 1
+                driver['ineligible'] = None #NULL
+            if driver['qual'] == 1:
+                driver['pole'] = 1
+            else:
+                driver['pole'] = None
             if driver['delta'] < 0:
                 driver['delta'] = int(driver['delta'])
             else:
                 driver['delta'] = format(driver['delta'], '.3f')
-            if driver['qual'] == 1:
-                driver['pole'] = 1
-            else:
-                driver['pole'] = 0
+
                 
         self.driver_list.sort(key=itemgetter('position'))
 
-    def get_race_info(self):
+    def get_race_info(self): 
+        
         self.race_info = {
             'race id'      :self.json_dict['race_id'],
             'series id'    :self.json_dict['series_id'],
@@ -163,7 +149,7 @@ class _WebData:
             writer = csv.writer(f)
             writer.writerows(self.name_list)
         print('\ncsv. created')
-
+        
     def print_results(self, driver_only=False):
         print('')
         print(self.race_info['race name'])
@@ -183,12 +169,12 @@ class _WebData:
                       driver['car number'], name[0], driver['delta']))
         else:
             for name in self.name_list:
-                print (name[0])    
+                print (name[0])
 
 class Database:
     
-    def __init__(self, url):
-        self.qry = _WebData(url)
+    def __init__(self, url):   #take a WebData class that has been initialized to get 'url'
+        self.qry = WebData(url)
         self.qry.open_browser()
         self.qry.get_json()
         self.qry.close_browser()
@@ -223,6 +209,8 @@ class Database:
 # Other stats that need to be added?
         
 # DNF?
+# Pit stops?
+# laps_led -> miles led?
 
     def init_race_results_DB(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -239,7 +227,7 @@ class Database:
                   'finish INTEGER,'
                   'laps_led INTEGER,'
                   'win INTEGER,'        # 0, 1
-                  'eligible INTEGER,'   # 0, 1
+                  'ineligible INTEGER,'   # 0, 1
                   'encumbered INTEGER,' # 0, 1
                   'car_number INTEGER,'
                   'manufacturer TEXT,'
@@ -252,16 +240,16 @@ class Database:
             data = c.fetchone()
             if data[0] == 0:
                 c.execute('INSERT INTO Race_Results(driver_id, series_id, race_id, qual,'
-                                                    'pole, eligible, encumbered, car_number,'
+                                                    'pole, ineligible, car_number,'
                                                     'manufacturer, sponsor)'
-                                                    'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                                                    'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
                           (driver['driver id'], self.qry.race_info['series id'], 
                            self.qry.race_info['race id'], driver['qual'], driver['pole'],
-                           driver['eligible'], 0, driver['car number'], 
+                           driver['ineligible'], driver['car number'], 
                            driver['manufacturer'], driver['sponsor'])
                           )
                 conn.commit()
-        print('Results saved to DB')
+        print('Results initialized in DB')
         c.close()
         conn.close()
         
@@ -287,8 +275,8 @@ class Database:
 
 class Query:
     
-    def __init__(self, url):
-        self.qry = _WebData(url)
+    def __init__(self, WebData):
+        self.qry = WebData
 
     def results(self, driver_only=False):
         self.qry.open_browser()
