@@ -22,8 +22,7 @@ class WebData:
             3: 'stage3-feed',
             }
         self.feed = feeds[feed_type]
-        url = 'https://www.nascar.com/live/feeds/series_{}/{}/{}.json'.format(
-              series_id, race_id, self.feed)
+        url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.url = url
         
     chrome_ops = webdriver.ChromeOptions()
@@ -199,8 +198,7 @@ class Database:
                 c.execute('INSERT INTO Drivers VALUES(?, ?)',
                           (driver['driver id'], driver['driver name']))
                 conn.commit()
-                print('{} (ID = {}) was added to the database'
-                      .format(driver['driver name'], driver['driver id']))
+                print(f'{driver["driver name"]} (ID = {driver["driver id"]}) was added to the database')
         print('\nDatabase update complete')
         c.close()
         conn.close()
@@ -307,7 +305,7 @@ class Query:
                 crit_lap = stage_lap
             if flag_state != 1 and lap >= crit_lap:
                 print('\n' + self.qry.flag_dict[flag_state])
-                print('Laps: {}/{}'.format(lap, total_laps))
+                print(f'Laps: {lap}/{total_laps}')
                 print('Getting Running Order...')
                 time.sleep(results_pause)
                 self.qry.refresh_browser()
@@ -323,8 +321,8 @@ class Query:
             else:
                 if lap != prev_lap or flag_state != prev_flag:
                     print('\n' + self.qry.flag_dict[flag_state])
-                    print('Laps: {}/{}'.format(lap, total_laps))
-                    print('{} laps to go'.format(laps_to_go))
+                    print(f'Laps: {lap}/{total_laps}')
+                    print(f'{laps_to_go} laps to go')
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
                     self.qry.print_results(driver_only=False)
