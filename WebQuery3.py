@@ -208,13 +208,19 @@ class Database:
                   'manufacturer TEXT,'				# init
                   'sponsor TEXT'					# init
                   ')')
-		# Add the following?
-		# date, track name, race name, race number, number of stages, stage lengths, total laps, url(s)
         c.execute('CREATE TABLE IF NOT EXISTS Races ('
 		          'race_id INTEGER NOT NULL UNIQUE,'
 		          'series_id INTEGER,'
 		          'year INTEGER,'
+                  # date?
+                  # start time?
 		          'track_id INTEGER,'
+                  # Track name should be in track db
+                  'race_name TEXT,'
+                  # race number? Playoff race? Round?
+                  # num_stages?
+                  'stage_length INTEGER,'
+                  'total_laps INTEGER,'
 		          ')')
         for driver in self.qry.driver_list:
             # Check if row already exists. If not, create it.
