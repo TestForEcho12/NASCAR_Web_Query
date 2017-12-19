@@ -25,16 +25,16 @@ class WebData:
         url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.url = url
         
-    chrome_ops = webdriver.ChromeOptions()
-    chrome_ops.add_argument('headless')
-    flag_dict = {
-        1: 'Green',
-        2: 'Yellow',
-        3: 'Red',
-        4: 'Checkered',
-        8: 'Warm Up',
-        9: 'Not Active'
-        }
+        self.chrome_ops = webdriver.ChromeOptions()
+        self.chrome_ops.add_argument('headless')
+        self.flag_dict = {
+            1: 'Green',
+            2: 'Yellow',
+            3: 'Red',
+            4: 'Checkered',
+            8: 'Warm Up',
+            9: 'Not Active'
+			}
 
     def open_browser(self):
         self.browser = webdriver.Chrome(chrome_options=self.chrome_ops)
@@ -66,6 +66,8 @@ class WebData:
             for led in car['laps_led']:
                 if not led['end_lap'] == 0:       # Eliminates situation where pole winner doesn't lead first lap
                     laps_led += led['end_lap'] - led['start_lap'] + 1
+            if laps_led == 0:
+                laps_led = None
             self.driver_list.append({
                 'position'      :car['running_position'],
                 'laps led'      :laps_led,
@@ -172,8 +174,11 @@ class WebData:
 
 class Database:
     
-    def __init__(self, url):   #take a WebData class that has been initialized to get 'url'
-        self.qry = WebData(url)
+	# DNF?
+	# miles led?
+	
+    def __init__(self, WebData):
+        self.qry = WebData
         self.qry.open_browser()
         self.qry.get_json()
         self.qry.close_browser()
@@ -181,6 +186,76 @@ class Database:
         self.qry.clean_driver_names()
         self.qry.get_race_info()
         self.qry.get_race_status()
+		
+        # init results database
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
+                  'driver_id INTEGER,'				# init
+                  'series_id INTEGER,'				# init
+                  'race_id INTEGER,'				# init
+                  'qual INTEGER,'					# init
+                  'pole INTEGER,'       			# init	
+                  'stage1 INTEGER,'
+                  'stage2 INTEGER,'
+                  'stage3 INTEGER,'
+                  'finish INTEGER,'
+                  'laps_led INTEGER,'				
+                  'win INTEGER,'        
+                  'ineligible INTEGER,'   			# init
+                  'encumbered INTEGER,' 			# N/A
+                  'car_number INTEGER,'				# init
+                  'manufacturer TEXT,'				# init
+                  'sponsor TEXT'					# init
+                  ')')
+		# Add the following?
+		# date, track name, race name, race number, number of stages, stage lengths, total laps, url(s)
+        c.execute('CREATE TABLE IF NOT EXISTS Races ('
+		          'race_id INTEGER NOT NULL UNIQUE,'
+		          'series_id INTEGER,'
+		          'year INTEGER,'
+		          'track_id INTEGER,'
+		          ')')
+        for driver in self.qry.driver_list:
+            # Check if row already exists. If not, create it.
+            c.execute('SELECT EXISTS(SELECT * FROM Race_Results WHERE driver_id=? AND race_id=?)', 
+                      (driver['driver id'], self.qry.race_info['race id']))
+            data = c.fetchone()
+            if data[0] == 0:
+                c.execute('INSERT INTO Race_Results(driver_id, series_id, race_id, qual,'
+                                                    'pole, ineligible, car_number,'
+                                                    'manufacturer, sponsor)'
+                                                    'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                          (driver['driver id'], self.qry.race_info['series id'], 
+                           self.qry.race_info['race id'], driver['qual'], driver['pole'],
+                           driver['ineligible'], driver['car number'], 
+                           driver['manufacturer'], driver['sponsor'])
+                          )
+                conn.commit()
+        print('Results DB initialized')
+        c.close()
+        conn.close()
+        
+    def update_results_DB(self, stage):
+        stages = {
+                0: 'finish',
+                1: 'stage1',
+                2: 'stage2',
+                3: 'stage3'
+                }
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()     
+        for driver in self.qry.driver_list:
+            if stage == 0 and driver['position'] == 1:
+                win = 1
+            else:
+                win = None
+            c.execute('UPDATE Race_Results SET {}=?, laps_led=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+                      (driver['position'], driver['laps led'], win, driver['driver id'], self.qry.race_info['race id']))
+            conn.commit()
+        print('Results DB updated')
+        c.close()
+        conn.close()
         
     def update_driver_DB(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -198,75 +273,8 @@ class Database:
                 c.execute('INSERT INTO Drivers VALUES(?, ?)',
                           (driver['driver id'], driver['driver name']))
                 conn.commit()
-                print(f'{driver["driver name"]} (ID = {driver["driver id"]}) was added to the database')
+                print(f"{driver['driver name']} (ID = {driver['driver id']}) was added to the database")
         print('\nDatabase update complete')
-        c.close()
-        conn.close()
-
-# other defs will then populate everything else
-# Other stats that need to be added?
-        
-# DNF?
-# Pit stops?
-# laps_led -> miles led?
-
-    def init_race_results_DB(self):
-        conn = sqlite3.connect('NASCAR.db')
-        c = conn.cursor()
-        c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
-                  'driver_id INTEGER,'
-                  'series_id INTEGER,'
-                  'race_id INTEGER,'
-                  'qual INTEGER,'
-                  'pole INTEGER,'       # 0, 1
-                  'stage1 INTEGER,'
-                  'stage2 INTEGER,'
-                  'stage3 INTEGER,'
-                  'finish INTEGER,'
-                  'laps_led INTEGER,'
-                  'win INTEGER,'        # 0, 1
-                  'ineligible INTEGER,'   # 0, 1
-                  'encumbered INTEGER,' # 0, 1
-                  'car_number INTEGER,'
-                  'manufacturer TEXT,'
-                  'team TEXT,'
-                  'sponsor TEXT'
-                  ')')
-        for driver in self.qry.driver_list:
-            c.execute('SELECT EXISTS(SELECT * FROM Race_Results WHERE driver_id=? AND race_id=?)', 
-                      (driver['driver id'], self.qry.race_info['race id']))
-            data = c.fetchone()
-            if data[0] == 0:
-                c.execute('INSERT INTO Race_Results(driver_id, series_id, race_id, qual,'
-                                                    'pole, ineligible, car_number,'
-                                                    'manufacturer, sponsor)'
-                                                    'VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                          (driver['driver id'], self.qry.race_info['series id'], 
-                           self.qry.race_info['race id'], driver['qual'], driver['pole'],
-                           driver['ineligible'], driver['car number'], 
-                           driver['manufacturer'], driver['sponsor'])
-                          )
-                conn.commit()
-        print('Results initialized in DB')
-        c.close()
-        conn.close()
-        
-    def update_results_DB(self, stage):
-        
-        stages = {
-                0: 'finish',
-                1: 'stage1',
-                2: 'stage2',
-                3: 'stage3'
-                }
-        conn = sqlite3.connect('NASCAR.db')
-        c = conn.cursor()     
-        for driver in self.qry.driver_list:
-            c.execute('UPDATE Race_Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
-                      (driver['position'], driver['driver id'], self.qry.race_info['race id']))
-        
-            conn.commit()
-        print('Results updated in DB')
         c.close()
         conn.close()
 
