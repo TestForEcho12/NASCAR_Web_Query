@@ -4,6 +4,7 @@ import json
 import sqlite3
 import csv
 import datetime
+import Database
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from operator import itemgetter
@@ -25,7 +26,6 @@ class WebData:
         self.feed = feeds[feed_type]
         url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.url = url
-        print(self.url)
         
         self.chrome_ops = webdriver.ChromeOptions()
         self.chrome_ops.add_argument('headless')
@@ -140,7 +140,7 @@ class WebData:
                       (driver['driver id'],))
             name = c.fetchone()
             if name == None:
-                self.name_list.append(('ID not in database. Run "populate_DB"',))
+                self.name_list.append(('ID not in database. Run "Database.update_drivers"',))
             else:
                 self.name_list.append(name) 
         c.close()
@@ -223,6 +223,7 @@ class Query:
                 self.qry.fetch_names_from_DB()
                 self.qry.print_results(driver_only=False)
                 self.qry.name_list_to_csv(col=csv_col)
+                Database.live_race.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
                 if lap != prev_lap or flag_state != prev_flag:
@@ -232,6 +233,7 @@ class Query:
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
                     self.qry.print_results(driver_only=False)
+                    Database.live_race.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)
