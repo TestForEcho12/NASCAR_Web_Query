@@ -15,50 +15,51 @@ class Database:
         # init results database
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
-        c.execute('CREATE TABLE IF NOT EXISTS Race_Results ('
-                  'driver_id INTEGER,'			# __init__
-                  'race_id INTEGER,'			# __init__
-                  'qual INTEGER,'				# __init__
-                  'pole INTEGER,'       		# __init__	
-                  'stage1 INTEGER,'             # update_results_DB
-                  'stage2 INTEGER,'             # update_results_DB
-                  'stage3 INTEGER,'             # update_results_DB
-                  'finish INTEGER,'             # update_results_DB
-                  'laps_led INTEGER,'		    # update_results_DB
-                  'win INTEGER,'                # update_results_DB
-                  'ineligible INTEGER,'   		# __init__
-                  'encumbered INTEGER,' 		# N/A
-                  # Penalty???????
-                  'car_number INTEGER,'			# __init__
-                  'manufacturer TEXT,'			# __init__
-                  'sponsor TEXT'				# __init__
-                  ')')
+        c.execute("""CREATE TABLE IF NOT EXISTS Race_Results (
+                  driver_id INTEGER,
+                  race_id INTEGER,
+                  qual INTEGER,
+                  pole INTEGER,
+                  stage1 INTEGER,
+                  stage2 INTEGER,
+                  stage3 INTEGER,
+                  finish INTEGER,
+                  laps_led INTEGER,
+                  win INTEGER,
+                  ineligible INTEGER,
+                  encumbered INTEGER,
+                  car_number INTEGER,
+                  manufacturer TEXT,
+                  sponsor TEXT
+                  )""")
         # init race database
-        c.execute('CREATE TABLE IF NOT EXISTS Races ('
-		          'race_id INTEGER NOT NULL UNIQUE,'
-		          'series_id INTEGER,'
-		          'year INTEGER,'      # Do I need this if 'start_time' has the full date?
-                  'start_time INTEGER,'
-		          'track_id INTEGER,'
-                  'race_name TEXT,'
-                  'race_number INTEGER,'
-                  'stage_length INTEGER,'
-                  'total_laps INTEGER,'
-                  'tv TEXT'
-		            ')')
+        c.execute("""CREATE TABLE IF NOT EXISTS Races (
+		          race_id INTEGER NOT NULL UNIQUE,
+		          series_id INTEGER,
+		          year INTEGER,
+                  start_time INTEGER,
+		          track_id INTEGER,
+                  race_name TEXT,
+                  race_number INTEGER,
+                  stage_length INTEGER,
+                  total_laps INTEGER,
+                  tv TEXT,
+                  PRIMARY KEY(race_id)
+		          )""")
         # init track database
-        c.execute('CREATE TABLE IF NOT EXISTS Tracks ('
-                  'track_id INTEGER NOT NULL UNIQUE,'
-                  'track_name TEXT,'
-                  'length REAL,'
-                  'type TEXT'
-                  ')')
+        c.execute("""CREATE TABLE IF NOT EXISTS Tracks (
+                  track_id INTEGER NOT NULL UNIQUE,
+                  track_name TEXT,
+                  length REAL,
+                  type TEXT,
+                  PRIMARY KEY(track_id)
+                  )""")
         # init drivers database
-        c.execute('CREATE TABLE IF NOT EXISTS Drivers ('
-                  'driver_id INTEGER NOT NULL UNIQUE, '
-                  'driver_name TEXT NOT NULL UNIQUE, '
-                  'PRIMARY KEY(driver_id)'
-                  ')')
+        c.execute("""CREATE TABLE IF NOT EXISTS Drivers (
+                  driver_id INTEGER NOT NULL UNIQUE,
+                  driver_name TEXT NOT NULL UNIQUE,
+                  PRIMARY KEY(driver_id)
+                  )""")
         conn.commit()
         
         
