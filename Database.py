@@ -15,7 +15,7 @@ class Database:
         # init results database
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
-        c.execute("""CREATE TABLE IF NOT EXISTS Race_Results (
+        c.execute("""CREATE TABLE IF NOT EXISTS Results (
                   driver_id INTEGER,
                   race_id INTEGER,
                   qual INTEGER,
@@ -68,11 +68,11 @@ class Database:
         c = conn.cursor()
         for driver in self.qry.driver_list:
             # Check if row already exists. If not, create it.
-            c.execute('SELECT EXISTS(SELECT * FROM Race_Results WHERE driver_id=? AND race_id=?)', 
+            c.execute('SELECT EXISTS(SELECT * FROM Results WHERE driver_id=? AND race_id=?)', 
                       (driver['driver id'], self.qry.race_info['race id']))
             data = c.fetchone()
             if data[0] == 0:
-                c.execute('INSERT INTO Race_Results(driver_id, race_id, qual,'
+                c.execute('INSERT INTO Results(driver_id, race_id, qual,'
                                                     'pole, ineligible, car_number,'
                                                     'manufacturer, sponsor)'
                                                     'VALUES(?, ?, ?, ?, ?, ?, ?, ?)',
@@ -110,7 +110,7 @@ class Database:
                 win = 1
             else:
                 win = None
-            c.execute('UPDATE Race_Results SET {}=?, laps_led=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+            c.execute('UPDATE Results SET {}=?, laps_led=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
                       (driver['position'], driver['laps led'], win, driver['driver id'], self.qry.race_info['race id']))
         conn.commit()
         print('Results DB updated')
@@ -140,7 +140,7 @@ class Database:
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('SELECT EXISTS(SELECT race_id FROM Races WHERE race_id=?)',
-                  self.qry.race_info['race id'])
+                  (self.qry.race_info['race id'],))
         data = c.fetchone()
         if data[0] == 0:
             c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps) VALUES(?, ?, ?, ?, ?)',
