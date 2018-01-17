@@ -1,4 +1,12 @@
 import sqlite3
+import csv
+
+stages = {
+        0: 'finish',
+        1: 'stage1',
+        2: 'stage2',
+        3: 'stage3'
+        }
 
 class Database:
 	
@@ -64,6 +72,12 @@ class Database:
         
         
     def add_results(self):
+        """
+        Add rows to the 'Results' table
+        This initalizes the rows with qual and other data
+        Must be called before results can be updated with stages and finish
+        """
+        
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         for driver in self.qry.driver_list:
@@ -94,8 +108,8 @@ class Database:
         c.close()
         conn.close()
         
-        
     def update_results(self, stage):
+        # this has been switched to a global variable?
         stages = {
                 0: 'finish',
                 1: 'stage1',
@@ -117,7 +131,6 @@ class Database:
         c.close()
         conn.close()
         
-        
     def update_drivers(self):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
@@ -134,7 +147,6 @@ class Database:
         print('\nDatabase update complete')
         c.close()
         conn.close()
-        
         
     def add_race(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -154,6 +166,32 @@ class Database:
         conn.commit()
         c.close()
         conn.close()
+        
+    def get_results(self, race_id, stage_id):
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        stage = stages[stage_id]
+        sql = f"""SELECT driver_name FROM Drivers JOIN Results ON 
+                  Drivers.driver_id = Results.driver_id 
+                  WHERE race_id={race_id} ORDER BY {stage}"""
+        c.execute(sql)
+        drivers = c.fetchall()
+        self.driver_list = []
+        for driver in drivers:
+            print(driver[0])
+            self.driver_list.append(driver[0])
+        c.close()
+        conn.close()
+        
+    # in work
+    def results_to_csv(self, col='0'):  
+        csv_list = self.driver_list
+        csv_list.insert(0, col)
+        with open('results.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            for name in csv_list:
+                writer.writerow([name])
+        print('\ncsv. created')
         
 
 class live_race:
