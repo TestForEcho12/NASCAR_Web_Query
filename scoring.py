@@ -94,7 +94,7 @@ finish_points = {
 
 def get_driver_id_list():
     conn = sqlite3.connect('NASCAR.db')
-    df = pd.read_sql_query("""SELECT driver_id FROM Results INNER JOIN 
+    df = pd.read_sql_query("""SELECT driver_id FROM Results JOIN 
                            Races ON Results.race_id = Races.race_id 
                            WHERE series_id=? AND year=? 
                            """, params=(series, year), con=conn)
@@ -109,7 +109,7 @@ def sum_points(driver_id_list):
     for driver_id in driver_id_list:
         stage_pts = 0
         finish_pts = 0
-        df = pd.read_sql_query("""SELECT * FROM Results INNER JOIN
+        df = pd.read_sql_query("""SELECT * FROM Results JOIN
                                Races ON Results.race_id = Races.race_id
                                WHERE series_id=? AND year=? AND driver_id=?
                                """, params=(series, year, driver_id), con=conn)
@@ -117,13 +117,30 @@ def sum_points(driver_id_list):
             if row['ineligible'] != 1:
                 stage_pts += stage_points[row['stage1']] + stage_points[row['stage2']] + stage_points[row['stage3']]
                 finish_pts += finish_points[row['finish']]
-            pts = stage_pts + finish_pts
-            
+            pts = stage_pts + finish_pts 
         print(df['driver_id'][0], '\t', pts)
-
     conn.close()
     
-    
+def sum_points_2():
+    conn = sqlite3.connect('NASCAR.db')    
+    df = pd.read_sql_query("""SELECT driver_name, (ifnull(s1.stage, 0) + 
+                                                   ifnull(s2.stage, 0) + 
+                                                   ifnull(s3.stage, 0) + 
+                                                   ifnull(f.finish, 0)) AS pts
+                           FROM Results
+                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                           LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
+                           LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
+                           LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
+                           LEFT OUTER JOIN Points AS f ON Results.finish = f.position
+                           ORDER BY Results.driver_id
+                           """, con=conn)
+    print(df)
+    total = df.groupby('driver_name').sum()
+    print(total.sort_values('pts', ascending=False))
+
+    conn.close()
+
     
     
 if __name__ == '__main__':
