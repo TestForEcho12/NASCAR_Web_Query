@@ -1,5 +1,6 @@
 import sqlite3
 import csv
+import pandas as pd
 
 stages = {
         0: 'finish',
@@ -10,16 +11,7 @@ stages = {
 
 class Database:
 	
-    def __init__(self, WebData):
-        self.qry = WebData
-        self.qry.open_browser()
-        self.qry.get_json()
-        self.qry.close_browser()
-        self.qry.get_driver_info()
-        self.qry.clean_driver_names()
-        self.qry.get_race_info()
-        self.qry.get_race_status()
-		
+    def __init__(self):
         # init results database
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
@@ -70,7 +62,16 @@ class Database:
                   )""")
         conn.commit()
         
-        
+    def web_query(self, WebData):
+        self.qry = WebData
+        self.qry.open_browser()
+        self.qry.get_json()
+        self.qry.close_browser()
+        self.qry.get_driver_info()
+        self.qry.clean_driver_names()
+        self.qry.get_race_info()
+        self.qry.get_race_status()
+    
     def add_results(self):
         """
         Add rows to the 'Results' table
@@ -109,13 +110,6 @@ class Database:
         conn.close()
         
     def update_results(self, stage):
-        # this has been switched to a global variable?
-        stages = {
-                0: 'finish',
-                1: 'stage1',
-                2: 'stage2',
-                3: 'stage3'
-                }
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()     
         for driver in self.qry.driver_list:
@@ -182,8 +176,7 @@ class Database:
             self.driver_list.append(driver[0])
         c.close()
         conn.close()
-        
-    # in work
+
     def results_to_csv(self, col='0'):  
         csv_list = self.driver_list
         csv_list.insert(0, col)
@@ -193,6 +186,18 @@ class Database:
                 writer.writerow([name])
         print('\ncsv. created')
         
+    def laps_to_csv(self, series, year):
+        conn = sqlite3.connect('NASCAR.db')
+        df = pd.read_sql_query("""SELECT driver_name, SUM(laps_led) FROM Results 
+                               JOIN Races ON Results.race_id = Races.race_id
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               WHERE series_id=? AND year=? 
+                               GROUP BY Results.driver_id
+                               ORDER BY SUM(laps_led) DESC""", 
+                               params=(series, year), con=conn)
+        df.to_csv('laps led.csv')
+        conn.close()
+
 
 class live_race:
         
@@ -216,7 +221,6 @@ class live_race:
         c.close()
         conn.close()
         
-        
 # Needs to accept 'race_status' to get lap info
     def add_lap(self, driver_list, race_status):
         conn = sqlite3.connect('NASCAR.db')
@@ -231,7 +235,8 @@ class live_race:
         if not lap_exists:
             c.execute(f'ALTER TABLE Live_Race ADD COLUMN "{lap}" INTEGER')
         for driver in driver_list:
-            c.execute(f'UPDATE Live_Race SET "{lap}"=? WHERE driver_id=?', (driver['position'], driver['driver id']))
+            c.execute(f'UPDATE Live_Race SET "{lap}"=? WHERE driver_id=?', 
+                      (driver['position'], driver['driver id']))
         conn.commit()
         c.close()
         conn.close()
