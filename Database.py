@@ -1,5 +1,6 @@
 import sqlite3
 import csv
+import pandas as pd
 
 stages = {
         0: 'finish',
@@ -10,16 +11,7 @@ stages = {
 
 class Database:
 	
-    def __init__(self, WebData):
-        self.qry = WebData
-        self.qry.open_browser()
-        self.qry.get_json()
-        self.qry.close_browser()
-        self.qry.get_driver_info()
-        self.qry.clean_driver_names()
-        self.qry.get_race_info()
-        self.qry.get_race_status()
-		
+    def __init__(self):
         # init results database
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
@@ -36,24 +28,25 @@ class Database:
                   win INTEGER,
                   ineligible INTEGER,
                   encumbered INTEGER,
+                  penalty INTEGER,
                   car_number INTEGER,
                   manufacturer TEXT,
                   sponsor TEXT
                   )""")
         # init race database
         c.execute("""CREATE TABLE IF NOT EXISTS Races (
-		          race_id INTEGER NOT NULL UNIQUE,
-		          series_id INTEGER,
-		          year INTEGER,
+		           race_id INTEGER NOT NULL UNIQUE,
+		           series_id INTEGER,
+		           year INTEGER,
                   start_time INTEGER,
-		          track_id INTEGER,
+		           track_id INTEGER,
                   race_name TEXT,
                   race_number INTEGER,
                   stage_length INTEGER,
                   total_laps INTEGER,
                   tv TEXT,
                   PRIMARY KEY(race_id)
-		          )""")
+		           )""")
         # init track database
         c.execute("""CREATE TABLE IF NOT EXISTS Tracks (
                   track_id INTEGER NOT NULL UNIQUE,
@@ -70,7 +63,16 @@ class Database:
                   )""")
         conn.commit()
         
-        
+    def web_query(self, WebData):
+        self.qry = WebData
+        self.qry.open_browser()
+        self.qry.get_json()
+        self.qry.close_browser()
+        self.qry.get_driver_info()
+        self.qry.clean_driver_names()
+        self.qry.get_race_info()
+        self.qry.get_race_status()
+    
     def add_results(self):
         """
         Add rows to the 'Results' table
@@ -82,18 +84,30 @@ class Database:
         c = conn.cursor()
         for driver in self.qry.driver_list:
             # Check if row already exists. If not, create it.
-            c.execute('SELECT EXISTS(SELECT * FROM Results WHERE driver_id=? AND race_id=?)', 
-                      (driver['driver id'], self.qry.race_info['race id']))
+            c.execute("""SELECT EXISTS(SELECT * FROM Results WHERE 
+                                       driver_id=? AND 
+                                       race_id=?)""", 
+                      (driver['driver id'], 
+                       self.qry.race_info['race id']))
             data = c.fetchone()
             if data[0] == 0:
-                c.execute('INSERT INTO Results(driver_id, race_id, qual,'
-                                                    'pole, ineligible, car_number,'
-                                                    'manufacturer, sponsor)'
-                                                    'VALUES(?, ?, ?, ?, ?, ?, ?, ?)',
-                          (driver['driver id'], self.qry.race_info['race id'], 
-                           driver['qual'], driver['pole'],
-                           driver['ineligible'], driver['car number'], 
-                           driver['manufacturer'], driver['sponsor'])
+                c.execute("""INSERT INTO Results(driver_id, 
+                                                 race_id, 
+                                                 qual,
+                                                 pole, 
+                                                 ineligible, 
+                                                 car_number,
+                                                 manufacturer, 
+                                                 sponsor)
+                                        VALUES(?, ?, ?, ?, ?, ?, ?, ?)""",
+                          (driver['driver id'], 
+                           self.qry.race_info['race id'], 
+                           driver['qual'], 
+                           driver['pole'],
+                           driver['ineligible'], 
+                           driver['car number'], 
+                           driver['manufacturer'], 
+                           driver['sponsor'])
                           )
         conn.commit()
 #        date_stamp = int(datetime.datetime(2018,2,11,12).timestamp())  
@@ -109,13 +123,6 @@ class Database:
         conn.close()
         
     def update_results(self, stage):
-        # this has been switched to a global variable?
-        stages = {
-                0: 'finish',
-                1: 'stage1',
-                2: 'stage2',
-                3: 'stage3'
-                }
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()     
         for driver in self.qry.driver_list:
@@ -125,7 +132,11 @@ class Database:
             else:
                 win = None
             c.execute('UPDATE Results SET {}=?, laps_led=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
-                      (driver['position'], driver['laps led'], win, driver['driver id'], self.qry.race_info['race id']))
+                      (driver['position'], 
+                       driver['laps led'], 
+                       win, 
+                       driver['driver id'], 
+                       self.qry.race_info['race id']))
         conn.commit()
         print('Results DB updated')
         c.close()
@@ -140,7 +151,8 @@ class Database:
             data = c.fetchone()
             if data[0] == 0:
                 c.execute('INSERT INTO Drivers VALUES(?, ?)',
-                          (driver['driver id'], driver['driver name']))
+                          (driver['driver id'], 
+                           driver['driver name']))
                 print(f"{driver['driver name']} (ID = {driver['driver id']}) was added to the database")
         conn.commit()
                 
@@ -156,18 +168,25 @@ class Database:
         data = c.fetchone()
         if data[0] == 0:
             c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps) VALUES(?, ?, ?, ?, ?)',
-                      (self.qry.race_info['race id'], self.qry.race_info['series id'],
-                       self.qry.race_info['track id'], self.qry.race_info['race name'],
+                      (self.qry.race_info['race id'], 
+                       self.qry.race_info['series id'],
+                       self.qry.race_info['track id'], 
+                       self.qry.race_info['race name'],
                        self.qry.race_status['total laps']))
         else:
             c.execute('UPDATE Races(series_id, track_id, race_name, total_laps) VALUES(?, ?, ?, ?)',
-                      (self.qry.race_info['series id'], self.qry.race_info['track id'],
-                       self.qry.race_info['race name'], self.qry.race_status['total laps']))
+                      (self.qry.race_info['series id'], 
+                       self.qry.race_info['track id'],
+                       self.qry.race_info['race name'], 
+                       self.qry.race_status['total laps']))
         conn.commit()
         c.close()
         conn.close()
         
-    def get_results(self, race_id, stage_id):
+        
+class Fetch:
+        
+    def results(self, race_id, stage_id):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         stage = stages[stage_id]
@@ -176,25 +195,37 @@ class Database:
                   WHERE race_id={race_id} ORDER BY {stage}"""
         c.execute(sql)
         drivers = c.fetchall()
-        self.driver_list = []
+        driver_list = []
         for driver in drivers:
             print(driver[0])
-            self.driver_list.append(driver[0])
+            driver_list.append(driver[0])
         c.close()
         conn.close()
-        
-    # in work
-    def results_to_csv(self, col='0'):  
-        csv_list = self.driver_list
-        csv_list.insert(0, col)
+        return driver_list
+
+    def results_to_csv(self, race_id, stage_id, col='0'):  
+        driver_list = self.results(race_id, stage_id)
+        driver_list.insert(0, col)
         with open('results.csv', 'w', newline='') as f:
             writer = csv.writer(f)
-            for name in csv_list:
+            for name in driver_list:
                 writer.writerow([name])
         print('\ncsv. created')
         
+    def laps_to_csv(self, series, year):
+        conn = sqlite3.connect('NASCAR.db')
+        df = pd.read_sql_query("""SELECT driver_name, SUM(laps_led) FROM Results 
+                               JOIN Races ON Results.race_id = Races.race_id
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               WHERE series_id=? AND year=? 
+                               GROUP BY Results.driver_id
+                               ORDER BY SUM(laps_led) DESC""", 
+                               params=(series, year), con=conn)
+        df.to_csv('laps led.csv')
+        conn.close()
 
-class live_race:
+
+class LiveRace:
         
     def drop_table(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -216,8 +247,6 @@ class live_race:
         c.close()
         conn.close()
         
-        
-# Needs to accept 'race_status' to get lap info
     def add_lap(self, driver_list, race_status):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
@@ -231,7 +260,15 @@ class live_race:
         if not lap_exists:
             c.execute(f'ALTER TABLE Live_Race ADD COLUMN "{lap}" INTEGER')
         for driver in driver_list:
-            c.execute(f'UPDATE Live_Race SET "{lap}"=? WHERE driver_id=?', (driver['position'], driver['driver id']))
+            c.execute(f'UPDATE Live_Race SET "{lap}"=? WHERE driver_id=?', 
+                      (driver['position'], driver['driver id']))
         conn.commit()
         c.close()
         conn.close()
+        
+    def get_results(self):
+        conn = sqlite3.connect('NASCAR.db')        
+        df = pd.read_sql_query("""SELECT * FROM Live_Race
+                               JOIN Drivers ON Live_Race.driver_id = Drivers.driver_id
+                               """, con=conn)
+        df.to_csv('live race.csv')

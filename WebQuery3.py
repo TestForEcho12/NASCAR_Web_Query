@@ -2,7 +2,6 @@ import sys
 import time
 import json
 import sqlite3
-import csv
 import datetime
 import Database
 from selenium import webdriver
@@ -18,11 +17,11 @@ class WebData:
         #'https://www.nascar.com/cacher/2017/2/4636/qualification.json'
         #'https://www.nascar.com/cacher/2017/2/4636/raceResults.json'
         feeds = {
-            0: 'live-feed',
-            1: 'stage1-feed',
-            2: 'stage2-feed',
-            3: 'stage3-feed',
-            }
+                0: 'live-feed',
+                1: 'stage1-feed',
+                2: 'stage2-feed',
+                3: 'stage3-feed',
+                }
         self.feed = feeds[feed_type]
         url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.url = url
@@ -145,13 +144,6 @@ class WebData:
                 self.name_list.append(name) 
         c.close()
         conn.close()
-    
-    def name_list_to_csv(self, col=(0,)):
-        self.name_list.insert(0, col)
-        with open('results.csv', 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerows(self.name_list)
-        print('\ncsv. created')
         
     def print_results(self, driver_only=False):
         print('')
@@ -192,7 +184,7 @@ class Query:
         self.qry.fetch_names_from_DB()
         self.qry.print_results(driver_only)
 
-    def live_race(self, stage_lap=0, refresh=3, results_pause=10, csv_col=(0,)):
+    def live_race(self, stage_lap=0, refresh=3, results_pause=10):
         self.qry.open_browser()
         prev_lap = -1
         prev_flag = -1
@@ -222,7 +214,6 @@ class Query:
                 self.qry.get_race_status()
                 self.qry.fetch_names_from_DB()
                 self.qry.print_results(driver_only=False)
-                self.qry.name_list_to_csv(col=csv_col)
                 Database.live_race.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
