@@ -17,11 +17,11 @@ class WebData:
         #'https://www.nascar.com/cacher/2017/2/4636/qualification.json'
         #'https://www.nascar.com/cacher/2017/2/4636/raceResults.json'
         feeds = {
-            0: 'live-feed',
-            1: 'stage1-feed',
-            2: 'stage2-feed',
-            3: 'stage3-feed',
-            }
+                0: 'live-feed',
+                1: 'stage1-feed',
+                2: 'stage2-feed',
+                3: 'stage3-feed',
+                }
         self.feed = feeds[feed_type]
         url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.url = url
