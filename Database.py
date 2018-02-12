@@ -118,7 +118,7 @@ class Database:
 #        print(dt[0])
 #        print(datetime.datetime.fromtimestamp(dt[0]).date())
 #        print(datetime.datetime.fromtimestamp(dt[0]).time())
-        print('Results DB initialized')
+        print('\nResults DB initialized')
         c.close()
         conn.close()
         
@@ -138,7 +138,7 @@ class Database:
                        driver['driver id'], 
                        self.qry.race_info['race id']))
         conn.commit()
-        print('Results DB updated')
+        print('\nResults DB updated')
         c.close()
         conn.close()
         
@@ -174,17 +174,21 @@ class Database:
                        self.qry.race_info['race name'],
                        self.qry.race_status['total laps']))
         else:
-            c.execute('UPDATE Races(series_id, track_id, race_name, total_laps) VALUES(?, ?, ?, ?)',
+            c.execute('UPDATE Races SET (series_id, track_id, race_name, total_laps) = (?, ?, ?, ?) WHERE race_id=?', 
                       (self.qry.race_info['series id'], 
-                       self.qry.race_info['track id'],
+                       self.qry.race_info['track id'], 
                        self.qry.race_info['race name'], 
-                       self.qry.race_status['total laps']))
+                       self.qry.race_status['total laps'],
+                       self.qry.race_info['race id']))
         conn.commit()
         c.close()
         conn.close()
         
         
 class Fetch:
+    
+    def __init__(self):
+        pass
         
     def results(self, race_id, stage_id):
         conn = sqlite3.connect('NASCAR.db')
@@ -226,6 +230,9 @@ class Fetch:
 
 
 class LiveRace:
+    
+    def __init__(self):
+        pass
         
     def drop_table(self):
         conn = sqlite3.connect('NASCAR.db')
