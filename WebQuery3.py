@@ -185,6 +185,7 @@ class Query:
         self.qry.print_results(driver_only)
 
     def live_race(self, stage_lap=0, refresh=3, results_pause=10):
+        live = Database.LiveRace()
         self.qry.open_browser()
         prev_lap = -1
         prev_flag = -1
@@ -201,7 +202,7 @@ class Query:
                 crit_lap = total_laps
             else:
                 crit_lap = stage_lap
-            if flag_state != 1 and lap >= crit_lap:
+            if flag_state != 1 and lap >= crit_lap: # Yellow flag and stage end
                 print('\n' + self.qry.flag_dict[flag_state])
                 print(f'Laps: {lap}/{total_laps}')
                 print('Getting Running Order...')
@@ -214,17 +215,17 @@ class Query:
                 self.qry.get_race_status()
                 self.qry.fetch_names_from_DB()
                 self.qry.print_results(driver_only=False)
-                Database.live_race.add_lap(self.qry.driver_list, self.qry.race_status)
+                live.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
-                if lap != prev_lap or flag_state != prev_flag:
+                if lap != prev_lap or flag_state != prev_flag: # new lap or new flag
                     print('\n' + self.qry.flag_dict[flag_state])
                     print(f'Laps: {lap}/{total_laps}')
                     print(f'{laps_to_go} laps to go')
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
                     self.qry.print_results(driver_only=False)
-                    Database.live_race.add_lap(self.qry.driver_list, self.qry.race_status)
+                    live.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)

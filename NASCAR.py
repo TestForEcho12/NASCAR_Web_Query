@@ -5,7 +5,7 @@ import social
 
 year = 2018
 series_id = 1
-race_id = xxxx
+race_id = 4676
 track = '@DISupdates'
 hashtag = '#DAYTONA500'
 
@@ -18,13 +18,14 @@ qry.results()
 
 # Database object, load web object, add race and results to DB
 db = Database.Database()
+fetch = Database.Fetch()
 db.web_query(web)
 db.add_race()
 db.add_results()
 
 # Set up live race position tracking
-Database.LiveRace.drop_table()
-Database.LiveRace.add_table(qry.name_list)
+live = Database.LiveRace()
+live.add_table(db.qry.driver_list)
 
 # initalize social accounts
 reddit = social.reddit()
@@ -38,11 +39,10 @@ csv_col = 'xxxx'
 qry.live_race(stage_lap=stage_lap)
 db.web_query(web)
 db.update_results(stage=stage)
-Database.Fetch.results_to_csv(col=csv_col)
-Database.Fetch.laps_to_csv(series=series_id, year=year)
+fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
+fetch.laps_to_csv(series=series_id, year=year)
 excel.run_macros(series=series_id)
 
-comment = social.imgur_upload(stage=1)
+comment = social.imgur_upload(stage=stage)
 reddit.comment(url_id='xxxx', comment=comment)
 twitter.standings(srs=series_id, stg=stage, track=track, hashtag=hashtag)
-
