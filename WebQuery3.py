@@ -144,29 +144,6 @@ class WebData:
                 self.name_list.append(name) 
         c.close()
         conn.close()
-        
-    def print_results(self, driver_only=False):
-        print('')
-        print(self.race_info['race name'])
-        print(self.race_info['track name'])
-        flag_state = self.race_status['flag state']
-        if flag_state in self.flag_dict:
-            print('Flag:', self.flag_dict[flag_state])
-        else:
-            print('Flag', flag_state, 'not defined')
-        print('Lap:', self.race_status['lap number'], '/',
-              self.race_status['total laps'])
-        print('Time: ', datetime.timedelta(seconds=self.race_status['time of day']))
-        print('Elapsed: ', datetime.timedelta(seconds=self.race_status['elapsed time']), '\n')
-        if driver_only == False:
-            print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
-            print('------------------------------------------')
-            for driver, name in zip(self.driver_list, self.name_list):
-                print('{:^4}{:^8}{:22}{:^7}'.format(driver['position'], 
-                      driver['car number'], name[0], driver['delta']))
-        else:
-            for name in self.name_list:
-                print (name[0])
 
 
 class Query:
@@ -182,7 +159,33 @@ class Query:
         self.qry.get_race_info()
         self.qry.get_race_status()
         self.qry.fetch_names_from_DB()
-        self.qry.print_results(driver_only)
+        self._print_header()
+        self._print_results(driver_only)
+        
+    def _print_header(self):
+        print('')
+        print(self.qry.race_info['race name'])
+        print(self.qry.race_info['track name'])
+        flag_state = self.qry.race_status['flag state']
+        if flag_state in self.qry.flag_dict:
+            print('Flag:', self.qry.flag_dict[flag_state])
+        else:
+            print('Flag', flag_state, 'not defined')
+        print('Lap:', self.qry.race_status['lap number'], '/',
+              self.qry.race_status['total laps'])
+        print('Time: ', datetime.timedelta(seconds=self.qry.race_status['time of day']))
+        print('Elapsed: ', datetime.timedelta(seconds=self.qry.race_status['elapsed time']), '\n')
+    
+    def _print_results(self, driver_only=False):
+        if driver_only == False:
+            print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
+            print('------------------------------------------')
+            for driver, name in zip(self.qry.driver_list, self.qry.name_list):
+                print('{:^4}{:^8}{:22}{:^7}'.format(driver['position'], 
+                      driver['car number'], name[0], driver['delta']))
+        else:
+            for name in self.qry.name_list:
+                print (name[0])
 
     def live_race(self, stage_lap=0, refresh=3, results_pause=10):
         live = Database.LiveRace()
@@ -202,7 +205,8 @@ class Query:
                 crit_lap = total_laps
             else:
                 crit_lap = stage_lap
-            if flag_state != 1 and lap >= crit_lap: # Yellow flag and stage end
+            # Yellow flag and stage end
+            if flag_state != 1 and lap >= crit_lap: 
                 print('\n' + self.qry.flag_dict[flag_state])
                 print(f'Laps: {lap}/{total_laps}')
                 print('Getting Running Order...')
@@ -214,17 +218,20 @@ class Query:
                 self.qry.get_race_info()
                 self.qry.get_race_status()
                 self.qry.fetch_names_from_DB()
-                self.qry.print_results(driver_only=False)
+                self._print_header()
+                self._print_results()
                 live.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
-                if lap != prev_lap or flag_state != prev_flag: # new lap or new flag
+                # new lap or new flag
+                if lap != prev_lap or flag_state != prev_flag: 
                     print('\n' + self.qry.flag_dict[flag_state])
                     print(f'Laps: {lap}/{total_laps}')
                     print(f'{laps_to_go} laps to go')
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
-                    self.qry.print_results(driver_only=False)
+                    self._print_header()
+                    self._print_results()
                     live.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
                 prev_flag = flag_state
