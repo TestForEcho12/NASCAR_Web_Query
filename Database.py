@@ -35,18 +35,18 @@ class Database:
                   )""")
         # init race database
         c.execute("""CREATE TABLE IF NOT EXISTS Races (
-		           race_id INTEGER NOT NULL UNIQUE,
-		           series_id INTEGER,
-		           year INTEGER,
+		            race_id INTEGER NOT NULL UNIQUE,
+		            series_id INTEGER,
+		            year INTEGER,
                   start_time INTEGER,
-		           track_id INTEGER,
+		            track_id INTEGER,
                   race_name TEXT,
                   race_number INTEGER,
                   stage_length INTEGER,
                   total_laps INTEGER,
                   tv TEXT,
                   PRIMARY KEY(race_id)
-		           )""")
+		            )""")
         # init track database
         c.execute("""CREATE TABLE IF NOT EXISTS Tracks (
                   track_id INTEGER NOT NULL UNIQUE,
@@ -174,12 +174,26 @@ class Database:
                        self.qry.race_info['race name'],
                        self.qry.race_status['total laps']))
         else:
-            c.execute('UPDATE Races SET (series_id, track_id, race_name, total_laps) = (?, ?, ?, ?) WHERE race_id=?', 
+            c.execute('UPDATE Races SET series_id = ? WHERE race_id=?',
                       (self.qry.race_info['series id'], 
-                       self.qry.race_info['track id'], 
-                       self.qry.race_info['race name'], 
-                       self.qry.race_status['total laps'],
                        self.qry.race_info['race id']))
+            c.execute('UPDATE Races SET track_id = ? WHERE race_id=?',
+                      (self.qry.race_info['track id'], 
+                       self.qry.race_info['race id']))
+            c.execute('UPDATE Races SET race_name = ? WHERE race_id=?',
+                      (self.qry.race_info['race name'], 
+                       self.qry.race_info['race id']))
+            c.execute('UPDATE Races SET total_laps = ? WHERE race_id=?',
+                      (self.qry.race_status['total laps'], 
+                       self.qry.race_info['race id']))
+#            c.execute("""UPDATE Races 
+#                      SET (series_id, track_id, race_name, total_laps) = (?, ?, ?, ?) 
+#                      WHERE race_id=?""", 
+#                      (self.qry.race_info['series id'], 
+#                       self.qry.race_info['track id'], 
+#                       self.qry.race_info['race name'], 
+#                       self.qry.race_status['total laps'],
+#                       self.qry.race_info['race id']))
         conn.commit()
         c.close()
         conn.close()
@@ -262,7 +276,7 @@ class LiveRace:
         lap = race_status['lap number']
         lap_exists = False
         for col in col_list:
-            if col[1] == lap:
+            if col[1][0] == lap:
                 lap_exists = True
         if not lap_exists:
             c.execute(f'ALTER TABLE Live_Race ADD COLUMN "{lap}" INTEGER')
