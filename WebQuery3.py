@@ -9,6 +9,7 @@ from selenium.common.exceptions import NoSuchElementException
 from operator import itemgetter
 
 
+
 class WebData:
     
     def __init__(self, year, series_id, race_id, feed_type):
@@ -165,7 +166,7 @@ class Query:
     def _print_header(self):
         print('')
         print(self.qry.race_info['race name'])
-        print(self.qry.race_info['track name'])
+        print(self.qry.race_info['track name'] + '\n')
         flag_state = self.qry.race_status['flag state']
         if flag_state in self.qry.flag_dict:
             print('Flag:', self.qry.flag_dict[flag_state])
@@ -173,7 +174,8 @@ class Query:
             print('Flag', flag_state, 'not defined')
         print('Lap:', self.qry.race_status['lap number'], '/',
               self.qry.race_status['total laps'])
-        print('Time: ', datetime.timedelta(seconds=self.qry.race_status['time of day']))
+        print(self.qry.race_status['laps to go'], 'laps to go')
+        #print('Time: ', datetime.timedelta(seconds=self.qry.race_status['time of day']))
         print('Elapsed: ', datetime.timedelta(seconds=self.qry.race_status['elapsed time']), '\n')
     
     def _print_results(self, driver_only=False):
@@ -200,16 +202,13 @@ class Query:
             flag_state = self.qry.race_status['flag state']
             lap = self.qry.race_status['lap number']
             total_laps = self.qry.race_status['total laps']
-            laps_to_go = self.qry.race_status['laps to go']
             if stage_lap == 0:
                 crit_lap = total_laps
             else:
                 crit_lap = stage_lap
             # Yellow flag and stage end
             if flag_state != 1 and lap >= crit_lap: 
-                print('\n' + self.qry.flag_dict[flag_state])
-                print(f'Laps: {lap}/{total_laps}')
-                print('Getting Running Order...')
+                print('\nGetting Running Order...')
                 time.sleep(results_pause)
                 self.qry.refresh_browser()
                 self.qry.get_json()
@@ -220,19 +219,16 @@ class Query:
                 self.qry.fetch_names_from_DB()
                 self._print_header()
                 self._print_results()
-                live.add_lap(self.qry.driver_list, self.qry.race_status)
+                #live.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
                 # new lap or new flag
                 if lap != prev_lap or flag_state != prev_flag: 
-                    print('\n' + self.qry.flag_dict[flag_state])
-                    print(f'Laps: {lap}/{total_laps}')
-                    print(f'{laps_to_go} laps to go')
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
                     self._print_header()
                     self._print_results()
-                    live.add_lap(self.qry.driver_list, self.qry.race_status)
+                    #live.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)
