@@ -3,10 +3,11 @@ import csv
 import pandas as pd
 
 stages = {
-        0: 'finish',
+        0: 'qual',
         1: 'stage1',
         2: 'stage2',
-        3: 'stage3'
+        3: 'stage3',
+        9: 'finish',
         }
 
 class Database:
@@ -110,14 +111,6 @@ class Database:
                            driver['sponsor'])
                           )
         conn.commit()
-#        date_stamp = int(datetime.datetime(2018,2,11,12).timestamp())  
-#        c.execute('INSERT INTO Races(race_id, start_time) VALUES(?, ?)', (10, date_stamp))
-#        conn.commit()
-#        c.execute('SELECT start_time FROM Races WHERE race_id=10')
-#        dt = c.fetchone()
-#        print(dt[0])
-#        print(datetime.datetime.fromtimestamp(dt[0]).date())
-#        print(datetime.datetime.fromtimestamp(dt[0]).time())
         print('\nResults DB initialized')
         c.close()
         conn.close()
@@ -127,7 +120,7 @@ class Database:
         c = conn.cursor()     
         for driver in self.qry.driver_list:
             # Check for win
-            if stage == 0 and driver['position'] == 1:
+            if stage == 9 and driver['position'] == 1:
                 win = 1
             else:
                 win = None
@@ -160,7 +153,7 @@ class Database:
         c.close()
         conn.close()
         
-    def add_race(self):
+    def add_race(self, year):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('SELECT EXISTS(SELECT race_id FROM Races WHERE race_id=?)',
@@ -186,14 +179,9 @@ class Database:
             c.execute('UPDATE Races SET total_laps = ? WHERE race_id=?',
                       (self.qry.race_status['total laps'], 
                        self.qry.race_info['race id']))
-#            c.execute("""UPDATE Races 
-#                      SET (series_id, track_id, race_name, total_laps) = (?, ?, ?, ?) 
-#                      WHERE race_id=?""", 
-#                      (self.qry.race_info['series id'], 
-#                       self.qry.race_info['track id'], 
-#                       self.qry.race_info['race name'], 
-#                       self.qry.race_status['total laps'],
-#                       self.qry.race_info['race id']))
+            c.execute('UPDATE Races SET year = ? WHERE race_id=?',
+                      (self.qry.race_status['total laps'], 
+                       year))            
         conn.commit()
         c.close()
         conn.close()
@@ -274,12 +262,17 @@ class LiveRace:
         c.execute('PRAGMA table_info(Live_Race)')
         col_list = c.fetchall()
         lap = race_status['lap number']
+        print(f'Lap {lap} according to JSON')
         lap_exists = False
         for col in col_list:
             if col[1][0] == lap:
                 lap_exists = True
+                print(f'Lap {col[1][0]} found in database')
         if not lap_exists:
+            print(f'Lap {lap} was not found in database... adding lap')
             c.execute(f'ALTER TABLE Live_Race ADD COLUMN "{lap}" INTEGER')
+            print(f'Lap {lap} added to database')
+        print('Updating positions...')
         for driver in driver_list:
             c.execute(f'UPDATE Live_Race SET "{lap}"=? WHERE driver_id=?', 
                       (driver['position'], driver['driver id']))

@@ -5,7 +5,7 @@ import sqlite3
 import datetime
 import Database
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+import selenium.common.exceptions as selenium_exceptions
 from operator import itemgetter
 
 
@@ -26,9 +26,9 @@ class WebData:
         self.feed = feeds[feed_type]
         url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.url = url
-        
         self.chrome_ops = webdriver.ChromeOptions()
         self.chrome_ops.add_argument('headless')
+        self.chrome_ops.add_argument('--no-sandbox')  # fixes page crash issues
         self.flag_dict = {
             1: 'Green',
             2: 'Yellow',
@@ -49,16 +49,16 @@ class WebData:
         self.browser.refresh()
 
     def get_json(self):
-        try: table = self.browser.find_element_by_xpath('/html/body/pre')
+        try: 
+            table = self.browser.find_element_by_xpath('/html/body/pre')
         #Exit if there is no table
-        except NoSuchElementException:  
+        except selenium_exceptions.NoSuchElementException:  
             self.close_browser()
-            sys.exit('json page is not active')  
+            sys.exit('json page is not active')
         try:    
             self.json_dict = json.loads(table.text)
         #If page doesn't load, close browser
         except json.decoder.JSONDecodeError:    
-            self.close_browser()
             sys.exit('Fucking NASCAR.com wont load again')
 
     def get_driver_info(self):
