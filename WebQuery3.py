@@ -9,7 +9,6 @@ import selenium.common.exceptions as selenium_exceptions
 from operator import itemgetter
 
 
-
 class WebData:
     
     def __init__(self, year, series_id, race_id, feed_type):
@@ -77,6 +76,7 @@ class WebData:
                 'driver id'     :car['driver']['driver_id'],
                 'driver name'   :car['driver']['full_name'],
                 'delta'         :car['delta'],
+                'lap time'      :car['last_lap_time'],
                 'sponsor'       :car['sponsor_name'],
                 'qual'          :car['starting_position'],
                 'manufacturer'  :car['vehicle_manufacturer']})
@@ -93,6 +93,8 @@ class WebData:
                 driver['pole'] = None
             if driver['delta'] < 0:
                 driver['delta'] = int(driver['delta'])
+            elif driver['position'] == 1:
+                driver['delta'] = format(driver['lap time'], '.3f')
             else:
                 driver['delta'] = format(driver['delta'], '.3f')
 
@@ -140,7 +142,7 @@ class WebData:
                       (driver['driver id'],))
             name = c.fetchone()
             if name == None:
-                self.name_list.append(('ID not in database. Run "Database.update_drivers"',))
+                self.name_list.append((f'ID {driver["driver id"]} not in database. Run "Database.update_drivers"',))
             else:
                 self.name_list.append(name) 
         c.close()

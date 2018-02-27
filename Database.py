@@ -63,6 +63,8 @@ class Database:
                   PRIMARY KEY(driver_id)
                   )""")
         conn.commit()
+        c.close()
+        conn.close()
         
     def web_query(self, WebData):
         self.qry = WebData
@@ -160,12 +162,13 @@ class Database:
                   (self.qry.race_info['race id'],))
         data = c.fetchone()
         if data[0] == 0:
-            c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps) VALUES(?, ?, ?, ?, ?)',
+            c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps, year) VALUES(?, ?, ?, ?, ?, ?)',
                       (self.qry.race_info['race id'], 
                        self.qry.race_info['series id'],
                        self.qry.race_info['track id'], 
                        self.qry.race_info['race name'],
-                       self.qry.race_status['total laps']))
+                       self.qry.race_status['total laps'],
+                       year))
         else:
             c.execute('UPDATE Races SET series_id = ? WHERE race_id=?',
                       (self.qry.race_info['series id'], 
@@ -262,17 +265,12 @@ class LiveRace:
         c.execute('PRAGMA table_info(Live_Race)')
         col_list = c.fetchall()
         lap = race_status['lap number']
-        print(f'Lap {lap} according to JSON')
         lap_exists = False
         for col in col_list:
-            if col[1][0] == lap:
+            if col[1] == str(lap):
                 lap_exists = True
-                print(f'Lap {col[1][0]} found in database')
         if not lap_exists:
-            print(f'Lap {lap} was not found in database... adding lap')
             c.execute(f'ALTER TABLE Live_Race ADD COLUMN "{lap}" INTEGER')
-            print(f'Lap {lap} added to database')
-        print('Updating positions...')
         for driver in driver_list:
             c.execute(f'UPDATE Live_Race SET "{lap}"=? WHERE driver_id=?', 
                       (driver['position'], driver['driver id']))
@@ -285,4 +283,9 @@ class LiveRace:
         df = pd.read_sql_query("""SELECT * FROM Live_Race
                                JOIN Drivers ON Live_Race.driver_id = Drivers.driver_id
                                """, con=conn)
+        # Remove driver_id's and rearrange columns so driver_name is first
+        del df['driver_id']
+        cols = df.columns.tolist()
+        cols = cols[-1:] + cols[:-1]
+        df = df[cols]
         df.to_csv('live race.csv')
