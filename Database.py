@@ -3,11 +3,11 @@ import csv
 import pandas as pd
 
 stages = {
-        0: 'qual',
+        -1: 'qual',
         1: 'stage1',
         2: 'stage2',
         3: 'stage3',
-        9: 'finish',
+        0: 'finish',
         }
 
 class Database:
@@ -45,7 +45,6 @@ class Database:
                   race_number INTEGER,
                   stage_length INTEGER,
                   total_laps INTEGER,
-                  tv TEXT,
                   PRIMARY KEY(race_id)
 		            )""")
         # init track database
@@ -53,6 +52,7 @@ class Database:
                   track_id INTEGER NOT NULL UNIQUE,
                   track_name TEXT,
                   length REAL,
+                  nickname TEXT,
                   type TEXT,
                   PRIMARY KEY(track_id)
                   )""")
@@ -122,13 +122,12 @@ class Database:
         c = conn.cursor()     
         for driver in self.qry.driver_list:
             # Check for win
-            if stage == 9 and driver['position'] == 1:
+            if stage == 0 and driver['position'] == 1:
                 win = 1
             else:
                 win = None
-            c.execute('UPDATE Results SET {}=?, laps_led=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+            c.execute('UPDATE Results SET {}=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
                       (driver['position'], 
-                       driver['laps led'], 
                        win, 
                        driver['driver id'], 
                        self.qry.race_info['race id']))
@@ -136,6 +135,20 @@ class Database:
         print('\nResults DB updated')
         c.close()
         conn.close()
+        
+    def update_laps(self):
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()    
+        for driver in self.qry.driver_list:
+            if not driver['laps led'] == None:
+                c.execute('UPDATE Results SET laps_led=? WHERE driver_id=? and race_id=?',
+                          (driver['laps led'],
+                           driver['driver id'],
+                           self.qry.race_info['race id']))
+        conn.commit()
+        print('\nLaps Led updated')
+        c.close()
+        conn.close()         
         
     def update_drivers(self):
         conn = sqlite3.connect('NASCAR.db')
@@ -150,8 +163,24 @@ class Database:
                            driver['driver name']))
                 print(f"{driver['driver name']} (ID = {driver['driver id']}) was added to the database")
         conn.commit()
-                
-        print('\nDatabase update complete')
+        print('\nDriver database update complete')
+        c.close()
+        conn.close()
+        
+    def update_tracks(self):
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        c.execute('SELECT EXISTS(SELECT track_id FROM TRACKS WHERE track_id=?)',
+                  (self.qry.race_info['track id'],))
+        data = c.fetchone()
+        if data[0] == 0:
+            c.execute('INSERT INTO Tracks VALUES(?, ?, ?)',
+                      (self.qry.race_info['track id'],
+                       self.qry.race_info['track name'],
+                       self.qry.race_info['track length'],))
+            print(f"{self.qry.race_info['track name']} (ID = {self.qry.race_info['track id']}) was added to the database")
+        conn.commit()
+        print('\nTrack database update complete')
         c.close()
         conn.close()
         
@@ -283,7 +312,7 @@ class LiveRace:
         df = pd.read_sql_query("""SELECT * FROM Live_Race
                                JOIN Drivers ON Live_Race.driver_id = Drivers.driver_id
                                """, con=conn)
-        # Remove driver_id's and rearrange columns so driver_name is first
+        # Removes driver_id's and rearrange columns so driver_name is first
         del df['driver_id']
         cols = df.columns.tolist()
         cols = cols[-1:] + cols[:-1]

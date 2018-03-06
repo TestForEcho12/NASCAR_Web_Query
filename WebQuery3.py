@@ -34,7 +34,7 @@ class WebData:
             3: 'Red',
             4: 'Checkered',
             8: 'Warm Up',
-            9: 'Not Active'
+            9: 'Not Active',
 			}
 
     def open_browser(self):
@@ -58,7 +58,7 @@ class WebData:
             self.json_dict = json.loads(table.text)
         #If page doesn't load, close browser
         except json.decoder.JSONDecodeError:    
-            sys.exit('Fucking NASCAR.com wont load again')
+            sys.exit('NASCAR.com will not load')
 
     def get_driver_info(self):
         self.driver_list = []
@@ -80,25 +80,24 @@ class WebData:
                 'sponsor'       :car['sponsor_name'],
                 'qual'          :car['starting_position'],
                 'manufacturer'  :car['vehicle_manufacturer']})
-
-        # Check eligibility, pole, and format 'delta'
         for driver in self.driver_list:
+            # Check eligibility
             if '(i)' in driver['driver name']:
                 driver['ineligible'] = 1
             else:
                 driver['ineligible'] = None #NULL
+            # Check pole
             if driver['qual'] == 1:
                 driver['pole'] = 1
             else:
                 driver['pole'] = None
+            # Format 'delta'
             if driver['delta'] < 0:
                 driver['delta'] = int(driver['delta'])
             elif driver['position'] == 1:
                 driver['delta'] = format(driver['lap time'], '.3f')
             else:
                 driver['delta'] = format(driver['delta'], '.3f')
-
-                
         self.driver_list.sort(key=itemgetter('position'))
 
     def get_race_info(self): 
@@ -165,28 +164,35 @@ class Query:
         self._print_header()
         self._print_results(driver_only)
         
-    def _print_header(self):
+    def _print_header(self, stage_lap=0):
         print('')
-        print(self.qry.race_info['race name'])
-        print(self.qry.race_info['track name'] + '\n')
+        print(f"\n{self.qry.race_info['race name']}")
+        print(f"{self.qry.race_info['track name']}\n")
         flag_state = self.qry.race_status['flag state']
         if flag_state in self.qry.flag_dict:
-            print('Flag:', self.qry.flag_dict[flag_state])
+            print(f'Flag: {self.qry.flag_dict[flag_state]}')
         else:
-            print('Flag', flag_state, 'not defined')
-        print('Lap:', self.qry.race_status['lap number'], '/',
-              self.qry.race_status['total laps'])
-        print(self.qry.race_status['laps to go'], 'laps to go')
-        #print('Time: ', datetime.timedelta(seconds=self.qry.race_status['time of day']))
-        print('Elapsed: ', datetime.timedelta(seconds=self.qry.race_status['elapsed time']), '\n')
+            print(f'Flag {flag_state} not defined')
+        current_lap = self.qry.race_status['lap number']
+        if not stage_lap == 0:
+            total_laps = stage_lap
+            to_go = total_laps - current_lap
+        else:
+            total_laps = self.qry.race_status['total laps']
+            to_go = self.qry.race_status['laps to go']
+        print(f'Lap: {current_lap}/{total_laps}')
+        print(f'{to_go} laps to go')
+        print(f"Elapsed: {datetime.timedelta(seconds=self.qry.race_status['elapsed time'])}\n")
     
     def _print_results(self, driver_only=False):
         if driver_only == False:
             print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
             print('------------------------------------------')
             for driver, name in zip(self.qry.driver_list, self.qry.name_list):
-                print('{:^4}{:^8}{:22}{:^7}'.format(driver['position'], 
-                      driver['car number'], name[0], driver['delta']))
+                print(f"{driver['position']:^4}"
+                      f"{driver['car number']:^8}"
+                      f"{name[0]:22}"
+                      f"{driver['delta']:^7}")
         else:
             for name in self.qry.name_list:
                 print (name[0])
@@ -211,6 +217,7 @@ class Query:
             # Yellow flag and stage end
             if flag_state != 1 and lap >= crit_lap: 
                 print('\nGetting Running Order...')
+                print(f'Pausing {results_pause} seconds...')
                 time.sleep(results_pause)
                 self.qry.refresh_browser()
                 self.qry.get_json()
@@ -219,18 +226,18 @@ class Query:
                 self.qry.get_race_info()
                 self.qry.get_race_status()
                 self.qry.fetch_names_from_DB()
-                self._print_header()
+                self._print_header(stage_lap=stage_lap)
                 self._print_results()
-                #live.add_lap(self.qry.driver_list, self.qry.race_status)
+                live.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
                 # new lap or new flag
                 if lap != prev_lap or flag_state != prev_flag: 
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
-                    self._print_header()
+                    self._print_header(stage_lap=stage_lap)
                     self._print_results()
-                    #live.add_lap(self.qry.driver_list, self.qry.race_status)
+                    live.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
                 prev_flag = flag_state
                 time.sleep(refresh)
