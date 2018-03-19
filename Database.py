@@ -174,7 +174,7 @@ class Database:
                   (self.qry.race_info['track id'],))
         data = c.fetchone()
         if data[0] == 0:
-            c.execute('INSERT INTO Tracks VALUES(?, ?, ?)',
+            c.execute('INSERT INTO Tracks(track_id, track_name, length) VALUES(?, ?, ?)',
                       (self.qry.race_info['track id'],
                        self.qry.race_info['track name'],
                        self.qry.race_info['track length'],))
@@ -184,20 +184,21 @@ class Database:
         c.close()
         conn.close()
         
-    def add_race(self, year):
+    def add_race(self, year, race_number):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('SELECT EXISTS(SELECT race_id FROM Races WHERE race_id=?)',
                   (self.qry.race_info['race id'],))
         data = c.fetchone()
         if data[0] == 0:
-            c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps, year) VALUES(?, ?, ?, ?, ?, ?)',
+            c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps, year, race_number) VALUES(?, ?, ?, ?, ?, ?, ?)',
                       (self.qry.race_info['race id'], 
                        self.qry.race_info['series id'],
                        self.qry.race_info['track id'], 
                        self.qry.race_info['race name'],
                        self.qry.race_status['total laps'],
-                       year))
+                       year,
+                       race_number))
         else:
             c.execute('UPDATE Races SET series_id = ? WHERE race_id=?',
                       (self.qry.race_info['series id'], 
@@ -212,8 +213,11 @@ class Database:
                       (self.qry.race_status['total laps'], 
                        self.qry.race_info['race id']))
             c.execute('UPDATE Races SET year = ? WHERE race_id=?',
-                      (self.qry.race_status['total laps'], 
-                       year))            
+                      (year, 
+                       self.qry.race_info['race id']))
+            c.execute('UPDATE Races SET race_number = ? WHERE race_id=?',
+                      (race_number, 
+                       self.qry.race_info['race id']))  
         conn.commit()
         c.close()
         conn.close()
@@ -241,7 +245,7 @@ class Fetch:
         conn.close()
         return driver_list
 
-    def results_to_csv(self, race_id, stage_id, col='0'):  
+    def results_to_csv(self, race_id, stage_id, col):  
         driver_list = self.results(race_id, stage_id)
         driver_list.insert(0, col)
         with open('results.csv', 'w', newline='') as f:
@@ -261,6 +265,34 @@ class Fetch:
                                params=(series, year), con=conn)
         df.to_csv('laps led.csv')
         conn.close()
+    
+    def all_drivers(self, series, year):
+        conn = sqlite3.connect('NASCAR.db')
+        df = pd.read_sql_query("""SELECT driver_name FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE Races.series_id=? AND Races.year=?
+                               GROUP BY Results.driver_id
+                               ORDER BY driver_name""",
+                               params=(series, year), con=conn)
+        print('\nAll drivers:\n')
+        for driver in df['driver_name']:
+            print(driver)
+        conn.close()
+        
+    def ineligible_drivers(self, series, year):
+        conn = sqlite3.connect('NASCAR.db')
+        df = pd.read_sql_query("""SELECT driver_name FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE Races.series_id=? AND Races.year=? AND Results.ineligible = 1
+                               GROUP BY Results.driver_id
+                               ORDER BY driver_name""",
+                               params=(series, year), con=conn)
+        print('\nIneligible drivers:\n')
+        for driver in df['driver_name']:
+            print(driver)
+        conn.close()
 
 
 class LiveRace:
@@ -277,7 +309,6 @@ class LiveRace:
         conn.close()
         
     def add_table(self, driver_list):
-        self.drop_table()
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('CREATE TABLE IF NOT EXISTS Live_Race(driver_id INTEGER, "0" INTEGER)')
