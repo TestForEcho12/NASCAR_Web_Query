@@ -23,8 +23,7 @@ class WebData:
                 3: 'stage3-feed',
                 }
         self.feed = feeds[feed_type]
-        url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
-        self.url = url
+        self.url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
         self.chrome_ops = webdriver.ChromeOptions()
         self.chrome_ops.add_argument('headless')
         self.chrome_ops.add_argument('--no-sandbox')  # fixes page crash issues
