@@ -146,7 +146,7 @@ class Database:
                            driver['driver id'],
                            self.qry.race_info['race id']))
         conn.commit()
-        print('\nLaps Led updated')
+        print('\nLaps Led updated\n')
         c.close()
         conn.close()         
         
@@ -184,21 +184,22 @@ class Database:
         c.close()
         conn.close()
         
-    def add_race(self, year, race_number):
+    def add_race(self, year, race_number, stage_length):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()
         c.execute('SELECT EXISTS(SELECT race_id FROM Races WHERE race_id=?)',
                   (self.qry.race_info['race id'],))
         data = c.fetchone()
         if data[0] == 0:
-            c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps, year, race_number) VALUES(?, ?, ?, ?, ?, ?, ?)',
+            c.execute('INSERT INTO Races(race_id, series_id, track_id, race_name, total_laps, year, race_number, stage_length) VALUES(?, ?, ?, ?, ?, ?, ?, ?)',
                       (self.qry.race_info['race id'], 
                        self.qry.race_info['series id'],
                        self.qry.race_info['track id'], 
                        self.qry.race_info['race name'],
                        self.qry.race_status['total laps'],
                        year,
-                       race_number))
+                       race_number,
+                       stage_length,))
         else:
             c.execute('UPDATE Races SET series_id = ? WHERE race_id=?',
                       (self.qry.race_info['series id'], 
@@ -217,7 +218,10 @@ class Database:
                        self.qry.race_info['race id']))
             c.execute('UPDATE Races SET race_number = ? WHERE race_id=?',
                       (race_number, 
-                       self.qry.race_info['race id']))  
+                       self.qry.race_info['race id']))
+            c.execute('UPDATE Races SET stage_length = ? WHERE race_id=?',
+                      (stage_length, 
+                       self.qry.race_info['race id']))
         conn.commit()
         c.close()
         conn.close()
