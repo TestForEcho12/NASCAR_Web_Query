@@ -76,6 +76,7 @@ class WebData:
                 'driver name'   :car['driver']['full_name'],
                 'delta'         :car['delta'],
                 'lap time'      :car['last_lap_time'],
+                'speed'         :car['last_lap_speed'],
                 'sponsor'       :car['sponsor_name'],
                 'qual'          :car['starting_position'],
                 'manufacturer'  :car['vehicle_manufacturer']})
@@ -185,13 +186,14 @@ class Query:
     
     def _print_results(self, driver_only=False):
         if driver_only == False:
-            print('{:^4}{:^8}{:22}{:^7}'.format('Pos', '#', 'Driver', 'Delta'))
-            print('------------------------------------------')
+            print('{:^4}{:^8}{:22}{:^7}{:^15}'.format('Pos', '#', 'Driver', 'Delta', 'Speed'))
+            print('-----------------------------------------------------')
             for driver, name in zip(self.qry.driver_list, self.qry.name_list):
                 print(f"{driver['position']:^4}"
                       f"{driver['car number']:^8}"
                       f"{name[0]:22}"
-                      f"{driver['delta']:^7}")
+                      f"{driver['delta']:^7}"
+                      f"{driver['speed']:^15}")
         else:
             for name in self.qry.name_list:
                 print (name[0])

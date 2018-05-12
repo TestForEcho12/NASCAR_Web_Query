@@ -123,12 +123,11 @@ class Database:
         for driver in self.qry.driver_list:
             # Check for win
             if stage == 0 and driver['position'] == 1:
-                win = 1
-            else:
-                win = None
-            c.execute('UPDATE Results SET {}=?, win=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+                c.execute('UPDATE Results SET win=1 WHERE driver_id=? AND race_id=?',
+                          (driver['driver id'],
+                           self.qry.race_info['race id']))
+            c.execute('UPDATE Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
                       (driver['position'], 
-                       win, 
                        driver['driver id'], 
                        self.qry.race_info['race id']))
         conn.commit()
