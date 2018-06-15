@@ -161,8 +161,18 @@ class Query:
         self.qry.get_race_info()
         self.qry.get_race_status()
         self.qry.fetch_names_from_DB()
-        self._print_header()
-        self._print_results(driver_only)
+#        self._print_header()
+#        self._print_results(driver_only)
+        
+    def qual(self):
+        self.results()
+        qual_dict = {}
+        for driver, name in zip(self.qry.driver_list, self.qry.name_list):
+            qual_dict[driver['qual']] = name[0]
+        qual_order = list(sorted(qual_dict.items(), key=lambda x:x[0]))
+        self.qual_order = [i[1] for i in qual_order]
+        for driver in self.qual_order:
+            print(driver)
         
     def _print_header(self, stage_lap=0):
         print('')

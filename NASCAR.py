@@ -7,15 +7,16 @@ import timer
 
 year = 2018
 series_id = 1
-race_id = 4686
-race_number = 12
-stage_length = 80
-track = '@kansasspeedway'
-hashtags = ['#KCM400',]
-col = 48
+race_id = 4692
+race_number = 15
+col = 60
+stage_length = 60
+track = '@MISpeedway'
+hashtags = ['#FireKeepersCasino400',]
+
 
 # pause until racetime
-timer.delay_start(2018,5,12,20,0)
+timer.delay_start(2018,6,10,14,0)
 
 # set up live feed web object
 web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
@@ -114,7 +115,6 @@ reddit.comment(url_id=reddit_id, comment=comment)
 twitter.standings(srs=series_id, stg=stage, track=track)
 
 
-
 # Finish
 stage = 0
 stage_lap = 0
@@ -155,6 +155,9 @@ twitter.standings(srs=series_id, stg=stage, track=track)
 # Post Race
 reddit_id = reddit.get_id('Post-Race')
 reddit.comment(url_id=reddit_id, comment=comment)
+
 time.sleep(90)
 reddit_id = reddit.get_id('Scorecard')
 reddit.comment(url_id=reddit_id, comment=comment)
+twitter.manufacturer(srs=series_id, track=track)
+    

@@ -126,14 +126,30 @@ class Database:
                 c.execute('UPDATE Results SET win=1 WHERE driver_id=? AND race_id=?',
                           (driver['driver id'],
                            self.qry.race_info['race id']))
-            c.execute('UPDATE Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
-                      (driver['position'], 
-                       driver['driver id'], 
-                       self.qry.race_info['race id']))
+            if stage == -1:
+                c.execute('UPDATE Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+                          (driver['qual'], 
+                           driver['driver id'], 
+                           self.qry.race_info['race id']))    
+            else:
+                c.execute('UPDATE Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
+                          (driver['position'], 
+                           driver['driver id'], 
+                           self.qry.race_info['race id']))
         conn.commit()
         print('\nResults DB updated')
         c.close()
         conn.close()
+        
+#    def update_qual(self, year, series, race_id, stage):
+#        conn = sqlite3.connect('NASCAR.db')
+#        c = conn.cursor()  
+#            
+#        
+#        conn.commit()
+#        print('\nQual updated in DB')
+#        c.close()
+#        conn.close()
         
     def update_laps(self):
         conn = sqlite3.connect('NASCAR.db')
