@@ -94,10 +94,11 @@ class scoring():
         self.total['delta'] = ''
         self.total = self.total[cols]
         for index, row in self.total.iterrows():
-            self.total.loc[index, 'Pos'] = index + 1     
+            self.total.loc[index, 'Pos'] = index + 1
         
     def drivers(self, num_races):
         conn = sqlite3.connect('NASCAR.db')
+        # Select all drivers that have run the given series and year
         df = pd.read_sql_query("""SELECT driver_name FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                JOIN Races ON Results.race_id = Races.race_id
@@ -248,23 +249,21 @@ class scoring():
                 delta = ''
             delta_standings[key] = delta
 
-
-    
-    
+"""Where I think this code currently stands (Add comments dumbass)
+      - To run 'standings_delta' you have to run 'ties' first 
+        If we are going to run 'ties' once, let's not run it twice
+      - 'standings_delta'  is also probably not fully functional""" 
 if __name__ == '__main__':
     
     year = 2018
-    series = 2
+    series = 1
     
     s = scoring(series=series, year=year)
     s.number_of_races()
     s.standings_delta(s.num_races)
     s.points(s.num_races)
+    s.ties()
     print(s.total)
-    
-#    s.points(last_race_num)
-#    s.ties()
-#    print(s.total)
     
     
 #    s.drivers(race_num)

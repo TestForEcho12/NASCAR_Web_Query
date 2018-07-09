@@ -7,6 +7,8 @@ import Database
 from selenium import webdriver
 import selenium.common.exceptions as selenium_exceptions
 from operator import itemgetter
+import pandas as pd
+from jinja2 import Environment, FileSystemLoader
 
 
 class WebData:
@@ -141,9 +143,9 @@ class WebData:
                       (driver['driver id'],))
             name = c.fetchone()
             if name == None:
-                self.name_list.append((f'ID {driver["driver id"]} not in database. Run "Database.update_drivers"',))
+                self.name_list.append(f'ID {driver["driver id"]} not in database. Run "Database.update_drivers"')
             else:
-                self.name_list.append(name) 
+                self.name_list.append(name[0]) 
         c.close()
         conn.close()
 
@@ -161,18 +163,55 @@ class Query:
         self.qry.get_race_info()
         self.qry.get_race_status()
         self.qry.fetch_names_from_DB()
-#        self._print_header()
-#        self._print_results(driver_only)
+        self._print_header()
+        self._print_results(driver_only)
         
     def qual(self):
         self.results()
         qual_dict = {}
         for driver, name in zip(self.qry.driver_list, self.qry.name_list):
-            qual_dict[driver['qual']] = name[0]
+            qual_dict[driver['qual']] = name
         qual_order = list(sorted(qual_dict.items(), key=lambda x:x[0]))
         self.qual_order = [i[1] for i in qual_order]
         for driver in self.qual_order:
             print(driver)
+            
+    def html_results(self, stage_lap=0):
+        df = pd.DataFrame(self.qry.driver_list)
+        df['driver name'] = self.qry.name_list
+        cols = ['position', 'car number', 'driver name', 'delta', 'speed']
+        new_cols = {'position': 'Pos', 
+                    'car number': '#',
+                    'driver name': 'Driver',
+                    'delta': 'Delta',
+                    'speed': 'Speed',
+                    }
+        df = df[cols]
+        df = df.rename(columns=new_cols)
+        header = f"""{self.qry.race_info['race name']}<br/>
+                     {self.qry.race_info['track name']}"""
+        flag_state = self.qry.race_status['flag state']
+        if flag_state in self.qry.flag_dict:
+            status = f"{self.qry.flag_dict[flag_state]}<br/>"
+        else:
+            status = f"Flag {flag_state} not defined<br/>"
+        current_lap = self.qry.race_status['lap number']
+        if not stage_lap == 0:
+            total_laps = stage_lap
+            to_go = total_laps - current_lap
+        else:
+            total_laps = self.qry.race_status['total laps']
+            to_go = self.qry.race_status['laps to go']
+        status = f"""{status}
+                     Lap: {current_lap}/{total_laps}<br/>
+                     {to_go} laps to go<br/>
+                     Elapsed: {datetime.timedelta(seconds=self.qry.race_status['elapsed time'])}"""
+        env = Environment(loader=FileSystemLoader('templates'))
+        template = env.get_template('template.html')
+        f = open("templates/table.html",'w')
+        f.write(template.render(header=header, status=status, table=df.to_html(index=False),))
+        f.close()
+
         
     def _print_header(self, stage_lap=0):
         print('')
@@ -199,14 +238,10 @@ class Query:
             print('{:^4}{:^8}{:22}{:^7}{:^15}'.format('Pos', '#', 'Driver', 'Delta', 'Speed'))
             print('-----------------------------------------------------')
             for driver, name in zip(self.qry.driver_list, self.qry.name_list):
-                print(f"{driver['position']:^4}"
-                      f"{driver['car number']:^8}"
-                      f"{name[0]:22}"
-                      f"{driver['delta']:^7}"
-                      f"{driver['speed']:^15}")
+                print(f"""{driver['position']:^4}{driver['car number']:^8}{name:22}{driver['delta']:^7}{driver['speed']:^15}""")
         else:
             for name in self.qry.name_list:
-                print (name[0])
+                print (name)
 
     def live_race(self, stage_lap=0, refresh=3, results_pause=10):
         live = Database.LiveRace()
@@ -237,8 +272,9 @@ class Query:
                 self.qry.get_race_info()
                 self.qry.get_race_status()
                 self.qry.fetch_names_from_DB()
-                self._print_header(stage_lap=stage_lap)
-                self._print_results()
+#                self._print_header(stage_lap=stage_lap)
+#                self._print_results()
+                self.html_results(stage_lap=stage_lap)
                 live.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
             else:
@@ -246,8 +282,9 @@ class Query:
                 if lap != prev_lap or flag_state != prev_flag: 
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
-                    self._print_header(stage_lap=stage_lap)
-                    self._print_results()
+#                    self._print_header(stage_lap=stage_lap)
+#                    self._print_results()
+                    self.html_results(stage_lap=stage_lap)
                     live.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
                 prev_flag = flag_state

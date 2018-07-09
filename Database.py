@@ -140,17 +140,7 @@ class Database:
         print('\nResults DB updated')
         c.close()
         conn.close()
-        
-#    def update_qual(self, year, series, race_id, stage):
-#        conn = sqlite3.connect('NASCAR.db')
-#        c = conn.cursor()  
-#            
-#        
-#        conn.commit()
-#        print('\nQual updated in DB')
-#        c.close()
-#        conn.close()
-        
+
     def update_laps(self):
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()    
