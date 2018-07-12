@@ -10,6 +10,8 @@ from operator import itemgetter
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
+pd.options.display.html.border = 0
+
 
 class WebData:
     
@@ -64,12 +66,19 @@ class WebData:
     def get_driver_info(self):
         self.driver_list = []
         for i, car in enumerate(self.json_dict['vehicles']):
+            # Laps led
             laps_led = 0
             for led in car['laps_led']:
                 if not led['end_lap'] == 0:       # Eliminates situation where pole winner doesn't lead first lap
                     laps_led += led['end_lap'] - led['start_lap'] + 1
             if laps_led == 0:
                 laps_led = None
+            # Pit Stops
+            pit_stops = car['pit_stops']
+            if pit_stops:
+                last_stop = pit_stops[-1]['pit_in_lap_count']
+            else:
+                last_stop = ''
             self.driver_list.append({
                 'position'      :car['running_position'],
                 'laps led'      :laps_led,
@@ -79,6 +88,7 @@ class WebData:
                 'delta'         :car['delta'],
                 'lap time'      :car['last_lap_time'],
                 'speed'         :car['last_lap_speed'],
+                'last pit'      :last_stop,
                 'sponsor'       :car['sponsor_name'],
                 'qual'          :car['starting_position'],
                 'manufacturer'  :car['vehicle_manufacturer']})
@@ -179,12 +189,13 @@ class Query:
     def html_results(self, stage_lap=0):
         df = pd.DataFrame(self.qry.driver_list)
         df['driver name'] = self.qry.name_list
-        cols = ['position', 'car number', 'driver name', 'delta', 'speed']
+        cols = ['position', 'car number', 'driver name', 'delta', 'speed', 'last pit']
         new_cols = {'position': 'Pos', 
                     'car number': '#',
                     'driver name': 'Driver',
                     'delta': 'Delta',
                     'speed': 'Speed',
+                    'last pit': 'Last Pitted',
                     }
         df = df[cols]
         df = df.rename(columns=new_cols)
