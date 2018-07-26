@@ -1,5 +1,6 @@
 import pandas as pd
 import sqlite3
+import copy
 
 class scoring():
     
@@ -51,7 +52,7 @@ class scoring():
         self.total = self.total.reset_index(drop=True)
         
         # Add empty column for each race
-        race_dict = {}
+        self.race_dict = {}
         races = df['race_id'].unique()
         self.total['Points Behind Leader'] = ''
         self.total['+/- Cutoff'] = ''
@@ -59,7 +60,7 @@ class scoring():
             # return data of first row where race_id = race
             name = df.loc[df['race_id'] == race].iloc[0]['nickname']
             race_num = df.loc[df['race_id'] == race].iloc[0]['race_number']
-            race_dict[race] = name
+            self.race_dict[race] = name
             # Add column if not a Duel
             if race_num > 0:
                 self.total[race] = 0
@@ -74,8 +75,8 @@ class scoring():
                 row['race_id'] = Daytona
             self.total.loc[self.total['driver_name'] == row['driver_name'], row['race_id']] += row['pts'] 
         
-        # Change column headers from race_id to track name
-        self.total = self.total.rename(columns = race_dict)
+        # Rename column headers. Races are renamed from id to track name after 
+        # ties() to avoid errors resulting from duplicate column names
         self.total = self.total.rename(columns = {'pts': 'Total Points',
                                         'driver_name': 'Drivers'})
         self.total = self.total.replace(to_replace=0, value='')
@@ -193,6 +194,9 @@ class scoring():
                 self.total.loc[index] = total_copy.loc[total_copy['Drivers'] == name].iloc[0]
                 self.total.loc[index, 'Pos'] = 'T-'+str(pos)
             conn.close()
+        # Rename race_ids with track names. Errors occur if this is done before
+        # ties since there will be columns with duplicate names
+        self.total = self.total.rename(columns = self.race_dict)
 
     def playoff_drivers(self):
         drivers = self.total['Drivers'].tolist()
@@ -224,45 +228,44 @@ class scoring():
             else:
                 self.total.loc[index, '+/- Cutoff'] = '-'
                 
-    def standings_delta(self, num_races):
+    def last_race_order(self):
         s = scoring(series=self.series, year=self.year)
-        race_num = num_races
+        race_num = self.num_races
         last_race_num = race_num - 1
         
         s.points(last_race_num)
         s.ties()
         last_race_order = s.total['Drivers'].tolist()
-        last_race_dict = {k:v for v,k in enumerate(last_race_order)}
+        self.last_race_dict = {k:v for v,k in enumerate(last_race_order)}
         
-        s.points(race_num)
-        s.ties()
-        race_order = s.total['Drivers'].tolist()
+    def standings_delta(self):
+        race_order = self.total['Drivers'].tolist()
         race_dict = {k:v for v,k in enumerate(race_order)}
         
-        delta_standings = {}
         for key in race_dict:
-            if key in last_race_order:
-                delta = last_race_dict[key] - race_dict[key]
+            if key in self.last_race_dict:
+                delta = self.last_race_dict[key] - race_dict[key]
                 if delta > 0:
                     delta = f'+{delta}'
-            else:
-                delta = ''
-            delta_standings[key] = delta
+                elif delta < 0:
+                    delta = f'{delta}'
+                else:
+                    delta = ''
+                self.total.loc[self.total['Drivers'] == key, 'delta'] = delta
 
-"""Where I think this code currently stands (Add comments dumbass)
-      - To run 'standings_delta' you have to run 'ties' first 
-        If we are going to run 'ties' once, let's not run it twice
-      - 'standings_delta'  is also probably not fully functional""" 
+
+
 if __name__ == '__main__':
     
     year = 2018
-    series = 1
+    series = 3
     
     s = scoring(series=series, year=year)
     s.number_of_races()
-    s.standings_delta(s.num_races)
     s.points(s.num_races)
     s.ties()
+    s.last_race_order()
+    s.standings_delta()
     print(s.total)
     
     
@@ -273,7 +276,7 @@ if __name__ == '__main__':
 #    print(s.total)
     
 
-#    s.total.to_html('HTML\points.html', index=False, border=0)
+    s.total.to_html('HTML\points_output.html', index=False, border=0)
 
 
 

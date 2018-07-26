@@ -77,6 +77,8 @@ class WebData:
             pit_stops = car['pit_stops']
             if pit_stops:
                 last_stop = pit_stops[-1]['pit_in_lap_count']
+                if last_stop == 0:
+                    last_stop = ''
             else:
                 last_stop = ''
             self.driver_list.append({
