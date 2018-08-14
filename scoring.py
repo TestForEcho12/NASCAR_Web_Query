@@ -1,8 +1,11 @@
 import pandas as pd
 import sqlite3
-import copy
+from jinja2 import Environment, FileSystemLoader
+from selenium import webdriver
 
-class scoring():
+pd.options.display.html.border = 0
+
+class points():
     
     def __init__(self, series, year):
         self.series = series
@@ -16,6 +19,9 @@ class scoring():
                                con=conn)
         conn.close()
         self.num_races = int(df['races'][0])
+        num_races_dict = {1:36, 2:33, 3:23}
+        self.total_num_races = num_races_dict[self.series]
+        self.num_races_left = num_races_dict[self.series] - self.num_races
 
     def points(self, num_races):
         conn = sqlite3.connect('NASCAR.db')    
@@ -157,7 +163,6 @@ class scoring():
                                                  Races.race_number > 0""",
                                     params=(winner, self.series, self.year, num_races,),
                                     con=conn)
-            print(df['COUNT(Results.race_id)'][0])
             if df['COUNT(Results.race_id)'][0] == num_races:
                 self.eligible_winners.append(winner)
         conn.close()
@@ -196,7 +201,7 @@ class scoring():
             conn.close()
         # Rename race_ids with track names. Errors occur if this is done before
         # ties since there will be columns with duplicate names
-        self.total = self.total.rename(columns = self.race_dict)
+#        self.total = self.total.rename(columns = self.race_dict)
 
     def playoff_drivers(self):
         drivers = self.total['Drivers'].tolist()
@@ -216,9 +221,9 @@ class scoring():
                 self.last_in = drivers[i-1]
                 break
             i += 1
+        self.cut_line = i
             
     def cutoff(self):
-        print(self.eligible_winners)
         for index, row in self.total.iterrows():
             driver = row['Drivers']
             if driver not in self.playoff_drivers:
@@ -229,7 +234,7 @@ class scoring():
                 self.total.loc[index, '+/- Cutoff'] = '-'
                 
     def last_race_order(self):
-        s = scoring(series=self.series, year=self.year)
+        s = points(series=self.series, year=self.year)
         race_num = self.num_races
         last_race_num = race_num - 1
         
@@ -252,31 +257,71 @@ class scoring():
                 else:
                     delta = ''
                 self.total.loc[self.total['Drivers'] == key, 'delta'] = delta
+                
+    def penalties(self, num_races):
+        conn = sqlite3.connect('NASCAR.db')
+        # Select all drivers that have run the given series and year
+        df = pd.read_sql_query("""SELECT driver_name, Results.race_id FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number <= ? AND
+                                     penalty IS NOT NULL""", 
+                               params=(self.series, self.year, num_races,),
+                               con=conn)
+        conn.close()
+        self.penalty = self.total
+        self.penalty = self.penalty.drop(['Pos', 'delta', 'Total Points', 'Points Behind Leader', '+/- Cutoff'], axis=1)
+        self.penalty.loc[:, self.penalty.columns != 'Drivers'] = 0
+        for index, row in df.iterrows():
+            self.penalty.loc[self.penalty['Drivers'] == row['driver_name'], row['race_id']] = 1
+
 
 
 
 if __name__ == '__main__':
     
     year = 2018
-    series = 3
+    series = 1
     
-    s = scoring(series=series, year=year)
-    s.number_of_races()
-    s.points(s.num_races)
-    s.ties()
-    s.last_race_order()
-    s.standings_delta()
-    print(s.total)
+    p = points(series=series, year=year)
+    p.number_of_races()
+    p.points(p.num_races)
+    p.drivers(p.num_races)
+    p.winners(p.num_races)
+    p.ties()
+    p.playoff_drivers()
+    p.cutoff()
+    p.last_race_order()
+    p.standings_delta()
+    p.penalties(p.num_races)
     
     
-#    s.drivers(race_num)
-#    s.winners(race_num)
-#    s.playoff_drivers()
-#    s.cutoff()
-#    print(s.total)
-    
+    env = Environment(loader=FileSystemLoader('HTML'))
+    template = env.get_template('Points.html')
+    f = open('HTML/Points_Output.html','w')
+    f.write(template.render(drivers=p.total[['Pos', 'delta', 'Drivers']].head(40),
+                            sums=p.total[['Total Points', 'Points Behind Leader', '+/- Cutoff']].head(40),
+                            points=p.total.drop(columns=['Pos', 'delta', 'Drivers', 'Total Points', 'Points Behind Leader', '+/- Cutoff']).head(40),
+                            total_num_races=p.total_num_races,
+                            num_races_left=p.num_races_left,
+                            winners=p.eligible_winners,
+                            penalties=p.penalty,
+                            cut_line=p.cut_line - 1,))
+    f.close()
 
-    s.total.to_html('HTML\points_output.html', index=False, border=0)
+    a = p.penalty
+
+    
+    chrome_ops = webdriver.ChromeOptions()
+    chrome_ops.add_argument('--start-maximized')
+    
+    browser = webdriver.Chrome(chrome_options=chrome_ops)
+    browser.get('file:///F:/Greg/Python/NASCAR/HTML/Points_Output.html')
+    table = browser.find_element_by_class_name('main')
+    table.screenshot('test.png')
+
 
 
 
