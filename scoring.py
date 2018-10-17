@@ -4,6 +4,7 @@ from jinja2 import Environment, FileSystemLoader
 from selenium import webdriver
 
 pd.options.display.html.border = 0
+pd.options.mode.chained_assignment = None
 
 class points():
     
@@ -201,7 +202,7 @@ class points():
             conn.close()
         # Rename race_ids with track names. Errors occur if this is done before
         # ties since there will be columns with duplicate names
-#        self.total = self.total.rename(columns = self.race_dict)
+        self.total = self.total.rename(columns = self.race_dict)
 
     def playoff_drivers(self):
         drivers = self.total['Drivers'].tolist()
@@ -224,14 +225,17 @@ class points():
         self.cut_line = i
             
     def cutoff(self):
-        for index, row in self.total.iterrows():
-            driver = row['Drivers']
-            if driver not in self.playoff_drivers:
-                self.total.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.total.loc[self.total['Drivers'] == self.last_in]['Total Points'])
-            elif driver not in self.eligible_winners:
-                self.total.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.total.loc[self.total['Drivers'] == self.first_out]['Total Points'])
-            else:
-                self.total.loc[index, '+/- Cutoff'] = '-'
+        if not self.num_races > 26:
+            for index, row in self.total.iterrows():
+                driver = row['Drivers']
+                if driver not in self.playoff_drivers:
+                    self.total.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.total.loc[self.total['Drivers'] == self.last_in]['Total Points'])
+                elif driver not in self.eligible_winners:
+                    self.total.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.total.loc[self.total['Drivers'] == self.first_out]['Total Points'])
+                else:
+                    self.total.loc[index, '+/- Cutoff'] = '-'
+        else:
+            self.total.loc[:, '+/- Cutoff'] = '-'
                 
     def last_race_order(self):
         s = points(series=self.series, year=self.year)
@@ -260,7 +264,7 @@ class points():
                 
     def penalties(self, num_races):
         conn = sqlite3.connect('NASCAR.db')
-        # Select all drivers that have run the given series and year
+        # Select all drivers that have run the given series and year with a penalty
         df = pd.read_sql_query("""SELECT driver_name, Results.race_id FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                JOIN Races ON Results.race_id = Races.race_id
@@ -297,30 +301,35 @@ if __name__ == '__main__':
     p.standings_delta()
     p.penalties(p.num_races)
     
+    p.total.to_csv('test.csv')
     
-    env = Environment(loader=FileSystemLoader('HTML'))
-    template = env.get_template('Points.html')
-    f = open('HTML/Points_Output.html','w')
-    f.write(template.render(drivers=p.total[['Pos', 'delta', 'Drivers']].head(40),
-                            sums=p.total[['Total Points', 'Points Behind Leader', '+/- Cutoff']].head(40),
-                            points=p.total.drop(columns=['Pos', 'delta', 'Drivers', 'Total Points', 'Points Behind Leader', '+/- Cutoff']).head(40),
-                            total_num_races=p.total_num_races,
-                            num_races_left=p.num_races_left,
-                            winners=p.eligible_winners,
-                            penalties=p.penalty,
-                            cut_line=p.cut_line - 1,))
-    f.close()
+    
+#    env = Environment(loader=FileSystemLoader('HTML'))
+#    template = env.get_template('Points.html')
+#    f = open('HTML/Points_Output.html','w')
+#    f.write(template.render(drivers=p.total[['Pos', 'delta', 'Drivers']].head(40),
+#                            sums=p.total[['Total Points', 'Points Behind Leader', '+/- Cutoff']].head(40),
+#                            points=p.total.drop(columns=['Pos', 'delta', 'Drivers', 'Total Points', 'Points Behind Leader', '+/- Cutoff']).head(40),
+#                            total_num_races=p.total_num_races,
+#                            num_races_left=p.num_races_left,
+#                            winners=p.eligible_winners,
+#                            penalties=p.penalty,
+#                            cut_line=p.cut_line - 1,))
+#    f.close()
+#
+#    a = p.penalty
+#
+#    
+#    chrome_ops = webdriver.ChromeOptions()
+##    chrome_ops.add_argument('headless')
+#    
+#    browser = webdriver.Chrome(chrome_options=chrome_ops)
+#    browser.get('file:///G:/Greg/Python/NASCAR/HTML/Points_Output.html')
+#    
+#    browser.set_window_size(1950, 997) #width, height
+#    browser.save_screenshot('HTML/test2.png')
+##    browser.quit()
 
-    a = p.penalty
-
-    
-    chrome_ops = webdriver.ChromeOptions()
-    chrome_ops.add_argument('--start-maximized')
-    
-    browser = webdriver.Chrome(chrome_options=chrome_ops)
-    browser.get('file:///F:/Greg/Python/NASCAR/HTML/Points_Output.html')
-    table = browser.find_element_by_class_name('main')
-    table.screenshot('test.png')
 
 
 
