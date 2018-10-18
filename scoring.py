@@ -24,7 +24,7 @@ class points():
         self.total_num_races = num_races_dict[self.series]
         self.num_races_left = num_races_dict[self.series] - self.num_races
 
-    def points(self, num_races):
+    def calc_points(self, num_races):
         conn = sqlite3.connect('NASCAR.db')    
         df = pd.read_sql_query("""SELECT driver_name, 
                                    Results.race_id, 
@@ -52,17 +52,17 @@ class points():
         conn.close()                          
 
         # Group by Driver and sum points
-        self.total = df.groupby('driver_name', as_index=False).sum()
-        del self.total['race_id']
-        del self.total['race_number']
-        self.total = self.total.sort_values('pts', ascending=False)
-        self.total = self.total.reset_index(drop=True)
+        self.points = df.groupby('driver_name', as_index=False).sum() 
+        del self.points['race_id']
+        del self.points['race_number']
+        self.points = self.points.sort_values('pts', ascending=False)
+        self.points = self.points.reset_index(drop=True)
         
         # Add empty column for each race
         self.race_dict = {}
         races = df['race_id'].unique()
-        self.total['Points Behind Leader'] = ''
-        self.total['+/- Cutoff'] = ''
+        self.points['Points Behind Leader'] = ''
+        self.points['+/- Cutoff'] = ''
         for race in races:
             # return data of first row where race_id = race
             name = df.loc[df['race_id'] == race].iloc[0]['nickname']
@@ -70,7 +70,7 @@ class points():
             self.race_dict[race] = name
             # Add column if not a Duel
             if race_num > 0:
-                self.total[race] = 0
+                self.points[race] = 0
             # Store Daytona race number as 'Daytona'
             if race_num == 1:
                 Daytona = race
@@ -80,29 +80,29 @@ class points():
             # If one of the Duels, replace race_number with Daytona race number
             if row['race_number'] == 0:
                 row['race_id'] = Daytona
-            self.total.loc[self.total['driver_name'] == row['driver_name'], row['race_id']] += row['pts'] 
+            self.points.loc[self.points['driver_name'] == row['driver_name'], row['race_id']] += row['pts'] 
         
         # Rename column headers. Races are renamed from id to track name after 
         # ties() to avoid errors resulting from duplicate column names
-        self.total = self.total.rename(columns = {'pts': 'Total Points',
+        self.points = self.points.rename(columns = {'pts': 'Total Points',
                                         'driver_name': 'Drivers'})
-        self.total = self.total.replace(to_replace=0, value='')
+        self.points = self.points.replace(to_replace=0, value='')
         
         # Points Behind Leader
-        self.total.loc[0, 'Points Behind Leader'] = '-'
-        leader_pts = self.total.loc[0, 'Total Points']
-        for index, row in self.total.iterrows():
+        self.points.loc[0, 'Points Behind Leader'] = '-'
+        leader_pts = self.points.loc[0, 'Total Points']
+        for index, row in self.points.iterrows():
             if index > 0:
-                self.total.loc[index, 'Points Behind Leader'] = row['Total Points'] - leader_pts
+                self.points.loc[index, 'Points Behind Leader'] = row['Total Points'] - leader_pts
     
         # Add position and delta columns
-        cols = self.total.columns.tolist()
+        cols = self.points.columns.tolist()
         cols = ['Pos', 'delta'] + cols
-        self.total['Pos'] = 0
-        self.total['delta'] = ''
-        self.total = self.total[cols]
-        for index, row in self.total.iterrows():
-            self.total.loc[index, 'Pos'] = index + 1
+        self.points['Pos'] = 0
+        self.points['delta'] = ''
+        self.points = self.points[cols]
+        for index, row in self.points.iterrows():
+            self.points.loc[index, 'Pos'] = index + 1
         
     def drivers(self, num_races):
         conn = sqlite3.connect('NASCAR.db')
@@ -115,9 +115,9 @@ class points():
                                      Races.race_number <= ?""", 
                                params=(self.series, self.year, num_races,),
                                con=conn)
-        self.drivers = df['driver_name'].unique()
+        self.all_drivers = df['driver_name'].unique()
         self.eligible_drivers = []
-        for driver in self.drivers:
+        for driver in self.all_drivers:
             df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
                                            JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                            JOIN Races ON Results.race_id = Races.race_id
@@ -170,11 +170,11 @@ class points():
         self.num_eligible_winners = len(self.eligible_winners)
       
     def ties(self):
-        tied_points = self.total[self.total.duplicated(subset='Total Points', keep=False)]
+        tied_points = self.points[self.points.duplicated(subset='Total Points', keep=False)]
         tied_points = tied_points['Total Points'].unique()
-        total_copy = self.total.copy()
+        total_copy = self.points.copy()
         for points in tied_points:
-            tied_total = self.total.loc[self.total['Total Points'] == points]
+            tied_total = self.points.loc[self.points['Total Points'] == points]
             drivers = tied_total['Drivers'].tolist()
             indices = tied_total.index.tolist()
             positions = tied_total['Pos'].tolist()
@@ -197,15 +197,15 @@ class points():
             tiebreaker = list(sorted(tie_dict.items(), key=lambda x:x[1]))
             tiebreaker = [i[0] for i in tiebreaker]
             for index, name in zip(indices, tiebreaker):
-                self.total.loc[index] = total_copy.loc[total_copy['Drivers'] == name].iloc[0]
-                self.total.loc[index, 'Pos'] = 'T-'+str(pos)
+                self.points.loc[index] = total_copy.loc[total_copy['Drivers'] == name].iloc[0]
+                self.points.loc[index, 'Pos'] = 'T-'+str(pos)
             conn.close()
         # Rename race_ids with track names. Errors occur if this is done before
         # ties since there will be columns with duplicate names
-        self.total = self.total.rename(columns = self.race_dict)
+        self.points = self.points.rename(columns = self.race_dict)
 
     def playoff_drivers(self):
-        drivers = self.total['Drivers'].tolist()
+        drivers = self.points['Drivers'].tolist()
         count = self.num_eligible_winners
         self.playoff_drivers = self.eligible_winners.copy()
         i = 0
@@ -226,29 +226,29 @@ class points():
             
     def cutoff(self):
         if not self.num_races > 26:
-            for index, row in self.total.iterrows():
+            for index, row in self.points.iterrows():
                 driver = row['Drivers']
                 if driver not in self.playoff_drivers:
-                    self.total.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.total.loc[self.total['Drivers'] == self.last_in]['Total Points'])
+                    self.points.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.points.loc[self.points['Drivers'] == self.last_in]['Total Points'])
                 elif driver not in self.eligible_winners:
-                    self.total.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.total.loc[self.total['Drivers'] == self.first_out]['Total Points'])
+                    self.points.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.points.loc[self.points['Drivers'] == self.first_out]['Total Points'])
                 else:
-                    self.total.loc[index, '+/- Cutoff'] = '-'
+                    self.points.loc[index, '+/- Cutoff'] = '-'
         else:
-            self.total.loc[:, '+/- Cutoff'] = '-'
+            self.points.loc[:, '+/- Cutoff'] = '-'
                 
     def last_race_order(self):
         s = points(series=self.series, year=self.year)
         race_num = self.num_races
         last_race_num = race_num - 1
         
-        s.points(last_race_num)
+        s.calc_points(last_race_num)
         s.ties()
-        last_race_order = s.total['Drivers'].tolist()
+        last_race_order = s.points['Drivers'].tolist()
         self.last_race_dict = {k:v for v,k in enumerate(last_race_order)}
         
     def standings_delta(self):
-        race_order = self.total['Drivers'].tolist()
+        race_order = self.points['Drivers'].tolist()
         race_dict = {k:v for v,k in enumerate(race_order)}
         
         for key in race_dict:
@@ -260,7 +260,7 @@ class points():
                     delta = f'{delta}'
                 else:
                     delta = ''
-                self.total.loc[self.total['Drivers'] == key, 'delta'] = delta
+                self.points.loc[self.points['Drivers'] == key, 'delta'] = delta
                 
     def penalties(self, num_races):
         conn = sqlite3.connect('NASCAR.db')
@@ -275,7 +275,7 @@ class points():
                                params=(self.series, self.year, num_races,),
                                con=conn)
         conn.close()
-        self.penalty = self.total
+        self.penalty = self.points
         self.penalty = self.penalty.drop(['Pos', 'delta', 'Total Points', 'Points Behind Leader', '+/- Cutoff'], axis=1)
         self.penalty.loc[:, self.penalty.columns != 'Drivers'] = 0
         for index, row in df.iterrows():
@@ -291,7 +291,7 @@ if __name__ == '__main__':
     
     p = points(series=series, year=year)
     p.number_of_races()
-    p.points(p.num_races)
+    p.calc_points(p.num_races)
     p.drivers(p.num_races)
     p.winners(p.num_races)
     p.ties()

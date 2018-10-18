@@ -7,16 +7,17 @@ import timer
 
 year = 2018
 series_id = 1
-race_id = 4694
-race_number = 18
-col = 72
-stage_length = 40
-track = '@DISupdates'
-hashtags = ['#NASCAR', '#CokeZeroSugar400',]
-
+race_id = 4708
+race_number = 31
+col = 124
+stage_length = 55
+track = '@TalladegaSuperS'
+hashtags = ['#1000Bulbs500', '#NASCARPlayoffs']
 
 # pause until racetime
-timer.delay_start(2018,7,7,19,0)
+timer.run(timer.delay_start2(2018,10,14,13,45))
+pause = 45
+
 
 # set up live feed web object
 web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
@@ -58,7 +59,7 @@ stage = 1
 stage_lap = stage_length
 csv_col = str(col + stage)
 
-qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=30)
+qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=pause)
 db.web_query(web)
 db.update_results(stage=stage)
 db.update_laps()
@@ -71,12 +72,11 @@ excel.calculate_points(series=series_id)
 excel.laps_led(series=series_id)
 excel.export_pictures(series=series_id)
 
+twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
+twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
 reddit = social.reddit()
-twitter = social.twitter(hashtags=hashtags)
 comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
-twitter.top_10(name_list=qry.qry.name_list, series_id=series_id, stage=stage)
 reddit.comment(url_id=reddit_id, comment=comment)
-twitter.standings(srs=series_id, stg=stage, track=track)
 
 
 # Stage 2
@@ -84,7 +84,7 @@ stage = 2
 stage_lap = stage_length*stage
 csv_col = str(col + stage)
 
-qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=30)
+qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=pause)
 db.web_query(web)
 db.update_results(stage=stage)
 db.update_laps()
@@ -108,12 +108,11 @@ excel.calculate_points(series=series_id)
 excel.laps_led(series=series_id)
 excel.export_pictures(series=series_id)
 
+twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
+twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
 reddit = social.reddit()
-twitter = social.twitter(hashtags=hashtags)
 comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
-twitter.top_10(name_list=qry.qry.name_list, series_id=series_id, stage=stage)
 reddit.comment(url_id=reddit_id, comment=comment)
-twitter.standings(srs=series_id, stg=stage, track=track)
 
 
 # Finish
@@ -121,7 +120,7 @@ stage = 0
 stage_lap = 0
 csv_col = str(col + 3)
 
-qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=120)
+qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=pause*4)
 db.web_query(web)
 db.update_results(stage=stage)
 db.update_laps()
@@ -145,19 +144,18 @@ excel.calculate_points(series=series_id)
 excel.laps_led(series=series_id)
 excel.export_pictures(series=series_id)
 
+twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
+twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
 reddit = social.reddit()
-twitter = social.twitter(hashtags=hashtags)
 comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
-twitter.top_10(name_list=qry.qry.name_list, series_id=series_id, stage=stage)
 reddit.comment(url_id=reddit_id, comment=comment)
-twitter.standings(srs=series_id, stg=stage, track=track)
 
 
 # Post Race
 reddit_id = reddit.get_id('Post-Race')
 reddit.comment(url_id=reddit_id, comment=comment)
 
-#time.sleep(90)
+time.sleep(30)
 reddit_id = reddit.get_id('Scorecard')
 reddit.comment(url_id=reddit_id, comment=comment)
-twitter.manufacturer(srs=series_id, track=track)
+twitter.manufacturer()
