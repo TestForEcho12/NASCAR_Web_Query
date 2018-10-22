@@ -23,6 +23,71 @@ class points():
         num_races_dict = {1:36, 2:33, 3:23}
         self.total_num_races = num_races_dict[self.series]
         self.num_races_left = num_races_dict[self.series] - self.num_races
+        
+    def drivers(self, num_races):
+        conn = sqlite3.connect('NASCAR.db')
+        # Select all drivers that have run the given series and year
+        df = pd.read_sql_query("""SELECT driver_name FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number <= ?""", 
+                               params=(self.series, self.year, num_races,),
+                               con=conn)
+        self.all_drivers = df['driver_name'].unique()
+        self.eligible_drivers = []
+        for driver in self.all_drivers:
+            df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
+                                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                                           JOIN Races ON Results.race_id = Races.race_id
+                                           WHERE Drivers.driver_name = ? AND 
+                                                 Races.series_id = ? AND
+                                                 Races.year = ? AND
+                                                 ineligible IS NULL AND
+                                                 Races.race_number > 0 AND
+                                                 Races.race_number <= ?""",
+                                    params=(driver, self.series, self.year, num_races,),
+                                    con=conn)                                           
+            if df['COUNT(Results.race_id)'][0] == num_races:
+                self.eligible_drivers.append(driver)
+        conn.close()
+        
+    def winners(self, num_races):
+        conn = sqlite3.connect('NASCAR.db')
+        df = pd.read_sql_query("""SELECT driver_name, encumbered FROM Results 
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number <= ? AND
+                                     win = 1 
+                               """,
+                               params=(self.series, self.year, num_races,),
+                               con=conn)
+        self.winners = df['driver_name'].unique()
+        self.num_winners = len(self.winners)
+        # Drop encumbered
+        unencumbered = df[df.encumbered != 1]['driver_name'].unique()
+        
+        self.eligible_winners = []
+        for winner in unencumbered:
+            #Check that driver has run every race
+            df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
+                                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                                           JOIN Races ON Results.race_id = Races.race_id
+                                           WHERE Drivers.driver_name = ? AND 
+                                                 Races.series_id = ? AND
+                                                 Races.year = ? AND
+                                                 Races.race_number <= ? AND
+                                                 ineligible IS NULL AND
+                                                 Races.race_number > 0""",
+                                    params=(winner, self.series, self.year, num_races,),
+                                    con=conn)
+            if df['COUNT(Results.race_id)'][0] == num_races:
+                self.eligible_winners.append(winner)
+        conn.close()
+        self.num_eligible_winners = len(self.eligible_winners)
 
     def calc_points(self, num_races):
         conn = sqlite3.connect('NASCAR.db')    
@@ -103,71 +168,6 @@ class points():
         self.points = self.points[cols]
         for index, row in self.points.iterrows():
             self.points.loc[index, 'Pos'] = index + 1
-        
-    def drivers(self, num_races):
-        conn = sqlite3.connect('NASCAR.db')
-        # Select all drivers that have run the given series and year
-        df = pd.read_sql_query("""SELECT driver_name FROM Results
-                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                               JOIN Races ON Results.race_id = Races.race_id
-                               WHERE series_id = ? AND 
-                                     year = ? AND 
-                                     Races.race_number <= ?""", 
-                               params=(self.series, self.year, num_races,),
-                               con=conn)
-        self.all_drivers = df['driver_name'].unique()
-        self.eligible_drivers = []
-        for driver in self.all_drivers:
-            df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
-                                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                                           JOIN Races ON Results.race_id = Races.race_id
-                                           WHERE Drivers.driver_name = ? AND 
-                                                 Races.series_id = ? AND
-                                                 Races.year = ? AND
-                                                 ineligible IS NULL AND
-                                                 Races.race_number > 0 AND
-                                                 Races.race_number <= ?""",
-                                    params=(driver, self.series, self.year, num_races,),
-                                    con=conn)                                           
-            if df['COUNT(Results.race_id)'][0] == num_races:
-                self.eligible_drivers.append(driver)
-        conn.close()
-        
-    def winners(self, num_races):
-        conn = sqlite3.connect('NASCAR.db')
-        df = pd.read_sql_query("""SELECT driver_name, encumbered FROM Results 
-                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                               JOIN Races ON Results.race_id = Races.race_id
-                               WHERE series_id = ? AND 
-                                     year = ? AND 
-                                     Races.race_number <= ? AND
-                                     win = 1 
-                               """,
-                               params=(self.series, self.year, num_races,),
-                               con=conn)
-        self.winners = df['driver_name'].unique()
-        self.num_winners = len(self.winners)
-        # Drop encumbered
-        unencumbered = df[df.encumbered != 1]['driver_name'].unique()
-        
-        self.eligible_winners = []
-        for winner in unencumbered:
-            #Check that driver has run every race
-            df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
-                                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                                           JOIN Races ON Results.race_id = Races.race_id
-                                           WHERE Drivers.driver_name = ? AND 
-                                                 Races.series_id = ? AND
-                                                 Races.year = ? AND
-                                                 Races.race_number <= ? AND
-                                                 ineligible IS NULL AND
-                                                 Races.race_number > 0""",
-                                    params=(winner, self.series, self.year, num_races,),
-                                    con=conn)
-            if df['COUNT(Results.race_id)'][0] == num_races:
-                self.eligible_winners.append(winner)
-        conn.close()
-        self.num_eligible_winners = len(self.eligible_winners)
       
     def ties(self):
         tied_points = self.points[self.points.duplicated(subset='Total Points', keep=False)]
@@ -203,7 +203,7 @@ class points():
         # Rename race_ids with track names. Errors occur if this is done before
         # ties since there will be columns with duplicate names
         self.points = self.points.rename(columns = self.race_dict)
-
+        
     def playoff_drivers(self):
         drivers = self.points['Drivers'].tolist()
         count = self.num_eligible_winners
@@ -247,7 +247,7 @@ class points():
         last_race_order = s.points['Drivers'].tolist()
         self.last_race_dict = {k:v for v,k in enumerate(last_race_order)}
         
-    def standings_delta(self):
+    def points_delta(self):
         race_order = self.points['Drivers'].tolist()
         race_dict = {k:v for v,k in enumerate(race_order)}
         
@@ -281,7 +281,31 @@ class points():
         for index, row in df.iterrows():
             self.penalty.loc[self.penalty['Drivers'] == row['driver_name'], row['race_id']] = 1
 
-
+    def calc_playoff_points(self, num_races):
+        conn = sqlite3.connect('NASCAR.db')    
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                   Results.race_id, 
+                                   Races.race_number, 
+                                   Tracks.nickname,
+                                   (ifnull(s1.playoff_stage, 0) + 
+                                    ifnull(s2.playoff_stage, 0) + 
+                                    ifnull(s3.playoff_stage, 0) + 
+                                    ifnull(f.playoff_finish, 0)) AS pts
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               JOIN Tracks ON Races.track_id = Tracks.track_id
+                               LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
+                               LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
+                               LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
+                               LEFT OUTER JOIN Points AS f ON Results.finish = f.position
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number <= ? AND
+                                     ineligible IS NULL""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)
+        conn.close()      
 
 
 if __name__ == '__main__':
@@ -298,7 +322,7 @@ if __name__ == '__main__':
     p.playoff_drivers()
     p.cutoff()
     p.last_race_order()
-    p.standings_delta()
+    p.points_delta()
     p.penalties(p.num_races)
     
     p.total.to_csv('test.csv')

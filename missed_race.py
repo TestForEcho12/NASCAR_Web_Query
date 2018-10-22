@@ -5,14 +5,11 @@ import social
 
 
 year = 2018
-series_id = 2
-race_id = 4725
-race_number = 12
-stage_length = 25
-col = 46
-
-track = '@poconoraceway'
-hashtags = ['#PoconoGreen250',]
+series_id = 3
+race_id = 4765
+race_number = 19
+col = 74
+stage_length = 20
 
 
 # set up live feed web object
@@ -36,6 +33,7 @@ csv_col = str(col)
 fetch.results_to_csv(race_id=race_id, stage_id=-1, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
 excel.results_from_csv(series=series_id)
+excel.calculate_points(series=series_id)
 excel.full_run(series=series_id)
 excel.laps_led(series=series_id)
 
@@ -75,7 +73,7 @@ excel.calculate_points(series=series_id)
 excel.laps_led(series=series_id)
 excel.export_pictures(series=series_id)
 
-
-twitter = social.twitter(hashtags=hashtags)
-twitter.top_10(name_list=qry.qry.name_list, series_id=series_id, stage=stage)
-twitter.standings(srs=series_id, stg=stage, track=track)
+track = '@TalladegaSuperS'
+hashtags = ['#Fr8Auctions250', '#NASCARPlayoffs']
+twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
+twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
