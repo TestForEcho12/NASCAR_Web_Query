@@ -143,7 +143,10 @@ class Database:
 
     def update_laps(self):
         conn = sqlite3.connect('NASCAR.db')
-        c = conn.cursor()    
+        c = conn.cursor()
+        # Reset everyone to NULL
+        c.execute('UPDATE Results SET laps_led=? WHERE race_id=?', (None, self.qry.race_info['race id']))
+        # Update laps led in DB
         for driver in self.qry.driver_list:
             if not driver['laps led'] == None:
                 c.execute('UPDATE Results SET laps_led=? WHERE driver_id=? and race_id=?',
@@ -277,7 +280,7 @@ class Fetch:
     
     def all_drivers(self, series, year):
         conn = sqlite3.connect('NASCAR.db')
-        df = pd.read_sql_query("""SELECT driver_name FROM Results
+        df = pd.read_sql_query("""SELECT driver_name, car_number, manufacturer FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                JOIN Races ON Results.race_id = Races.race_id
                                WHERE Races.series_id=? AND Races.year=?
@@ -288,6 +291,7 @@ class Fetch:
         for driver in df['driver_name']:
             print(driver)
         conn.close()
+        df.to_csv('results.csv')
         
     def ineligible_drivers(self, series, year):
         conn = sqlite3.connect('NASCAR.db')
