@@ -287,9 +287,6 @@ class Fetch:
                                GROUP BY Results.driver_id
                                ORDER BY driver_name""",
                                params=(series, year), con=conn)
-        print('\nAll drivers:\n')
-        for driver in df['driver_name']:
-            print(driver)
         conn.close()
         df.to_csv('results.csv')
         

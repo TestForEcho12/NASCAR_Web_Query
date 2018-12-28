@@ -7,16 +7,16 @@ import timer
 
 year = 2018
 series_id = 1
-race_id = 4708
-race_number = 31
-col = 124
-stage_length = 55
-track = '@TalladegaSuperS'
-hashtags = ['#1000Bulbs500', '#NASCARPlayoffs']
+race_id = 4712
+race_number = 35
+col = 140
+stage_length = 75
+track = '@ISMRaceway'
+hashtags = ['#CanAm500', '#NASCARPlayoffs']
 
 # pause until racetime
-timer.run(timer.delay_start2(2018,10,14,13,45))
-pause = 45
+timer.run(timer.delay_start2(2018,11,11,14,15))
+pause = 15
 
 
 # set up live feed web object
@@ -37,11 +37,13 @@ db.add_results()
 
 # Qual results to Excel
 csv_col = str(col)
+fetch.all_drivers(series=series_id, year=year)
+excel.all_drivers(series=series_id)
 fetch.results_to_csv(race_id=race_id, stage_id=-1, col=csv_col)
-fetch.laps_to_csv(series=series_id, year=year)
 excel.results_from_csv(series=series_id)
 excel.calculate_points(series=series_id)
 excel.full_run(series=series_id)
+fetch.laps_to_csv(series=series_id, year=year)
 excel.laps_led(series=series_id)
 
 # Set up live race position tracking
@@ -155,7 +157,8 @@ reddit.comment(url_id=reddit_id, comment=comment)
 reddit_id = reddit.get_id('Post-Race')
 reddit.comment(url_id=reddit_id, comment=comment)
 
-time.sleep(30)
-reddit_id = reddit.get_id('Scorecard')
-reddit.comment(url_id=reddit_id, comment=comment)
-twitter.manufacturer()
+if series_id == 1:
+    time.sleep(30)
+    reddit_id = reddit.get_id('Scorecard')
+    reddit.comment(url_id=reddit_id, comment=comment)
+    twitter.manufacturer()
