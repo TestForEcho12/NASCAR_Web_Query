@@ -299,9 +299,10 @@ class Fetch:
                                GROUP BY Results.driver_id
                                ORDER BY driver_name""",
                                params=(series, year), con=conn)
-        print('\nIneligible drivers:\n')
-        for driver in df['driver_name']:
-            print(driver)
+#        print('\nIneligible drivers:\n')
+#        for driver in df['driver_name']:
+#            print(driver)
+        df.to_csv('results.csv')
         conn.close()
 
 
