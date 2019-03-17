@@ -16,15 +16,12 @@ pd.options.display.html.border = 0
 class WebData:
     
     def __init__(self, year, series_id, race_id, feed_type):
-        #'https://www.nascar.com/live/feeds/series_2/4627/live-feed.json'
-        #'https://www.nascar.com/live/feeds/series_2/4636/stage1-feed.json'
-        #'https://www.nascar.com/cacher/2017/2/4636/qualification.json'
-        #'https://www.nascar.com/cacher/2017/2/4636/raceResults.json'
         feeds = {
                 0: 'live-feed',
                 1: 'stage1-feed',
                 2: 'stage2-feed',
                 3: 'stage3-feed',
+                10: 'live-qualifying-data',
                 }
         self.feed = feeds[feed_type]
         self.url = f'https://www.nascar.com/live/feeds/series_{series_id}/{race_id}/{self.feed}.json'
@@ -51,7 +48,7 @@ class WebData:
         self.browser.refresh()
 
     def get_json(self):
-        try: 
+        try:
             table = self.browser.find_element_by_xpath('/html/body/pre')
         #Exit if there is no table
         except selenium_exceptions.NoSuchElementException:  
@@ -60,7 +57,8 @@ class WebData:
         try:    
             self.json_dict = json.loads(table.text)
         #If page doesn't load, close browser
-        except json.decoder.JSONDecodeError:    
+        except json.decoder.JSONDecodeError:   
+            self.close_browser()
             sys.exit('NASCAR.com will not load')
 
     def get_driver_info(self):
@@ -115,7 +113,6 @@ class WebData:
         self.driver_list.sort(key=itemgetter('position'))
 
     def get_race_info(self): 
-        
         self.race_info = {
             'race id'      :self.json_dict['race_id'],
             'series id'    :self.json_dict['series_id'],
@@ -179,14 +176,18 @@ class Query:
         self._print_results(driver_only)
         
     def qual(self):
-        self.results()
-        qual_dict = {}
-        for driver, name in zip(self.qry.driver_list, self.qry.name_list):
-            qual_dict[driver['qual']] = name
-        qual_order = list(sorted(qual_dict.items(), key=lambda x:x[0]))
-        self.qual_order = [i[1] for i in qual_order]
-        for driver in self.qual_order:
-            print(driver)
+        self.qry.open_browser()
+        self.qry.get_json()
+        self.qry.close_browser()
+        self.qry.driver_list = []
+        for car in self.qry.json_dict:
+            self.qry.driver_list.append({
+                'position':     car['position'],
+                'driver id':    car['driver_id']})
+        self.qry.fetch_names_from_DB()
+        self.qry.driver_list.sort(key=itemgetter('position'))
+        print(self.qry.name_list)
+        print(self.qry.json_dict[0]['qualifying_round'])
             
     def html_results(self, stage_lap=0):
         df = pd.DataFrame(self.qry.driver_list)

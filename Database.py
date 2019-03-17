@@ -271,7 +271,7 @@ class Fetch:
         df = pd.read_sql_query("""SELECT driver_name, SUM(laps_led) FROM Results 
                                JOIN Races ON Results.race_id = Races.race_id
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                               WHERE series_id=? AND year=? 
+                               WHERE series_id=? AND year=? AND Races.race_number>0
                                GROUP BY Results.driver_id
                                ORDER BY SUM(laps_led) DESC""", 
                                params=(series, year), con=conn)
