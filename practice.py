@@ -45,7 +45,7 @@ def query(year, race_id, practice_id, practice_type):
     web.clean_driver_names()
     return web.driver_list
 
-def comment(practice_type, drivers):
+def comment(series, practice_type, drivers):
     num_drivers = 10
     if len(drivers) < num_drivers:
         num_drivers = len(drivers)
@@ -53,10 +53,13 @@ def comment(practice_type, drivers):
                      2: '2nd',
                      3: 'final',
                      }
+    srs = {1: 'Cup',
+           2: 'Xfinity',
+           3: 'Trucks',}
     if practice_type == 1:
-        comment = f'Fastest single lap times from {tweet_headers[practice_id]} Cup practice:\n'
+        comment = f'Fastest single lap times from {tweet_headers[practice_id]} {srs[series]} practice:\n'
     else:    
-        comment = f'Fastest 10 lap averages from {tweet_headers[practice_id]} Cup practice:\n'
+        comment = f'Fastest 10 lap averages from {tweet_headers[practice_id]} {srs[series]} practice:\n'
     count = 0
     while count < num_drivers:
         comment = f'{comment}\n{count + 1}) {drivers[count]["driver name"]}'
@@ -74,7 +77,7 @@ if __name__ == '__main__':
     hashtags = ['#NASCAR',]
     
     drivers = query(year, race_id, practice_id, practice_type)
-    com = comment(practice_type, drivers)
+    com = comment(series, practice_type, drivers)
     
     twitter = social.twitter(series, track, hashtags)
     twitter.practice(com)
