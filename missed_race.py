@@ -1,15 +1,14 @@
 import WebQuery3
 import Database
 import excel
-import social
 
 
-year = 2018
+year = 2019
 series_id = 3
-race_id = 4765
-race_number = 19
-col = 74
-stage_length = 20
+race_id = 4847
+race_number = 4
+stage_length = 70
+col = 14
 
 
 # set up live feed web object
@@ -29,51 +28,55 @@ db.add_race(year=year, race_number=race_number, stage_length=stage_length)
 db.add_results()
 
 # Qual results to Excel
+exl = excel.Excel(year=year, series=series_id)
 csv_col = str(col)
+fetch.all_drivers(series=series_id, year=year)
+exl.all_drivers()
+fetch.ineligible_drivers(series=series_id, year=year)
+exl.ineligible_drivers()
 fetch.results_to_csv(race_id=race_id, stage_id=-1, col=csv_col)
+exl.results_from_csv()
+exl.calculate_points()
+exl.full_run()
 fetch.laps_to_csv(series=series_id, year=year)
-excel.results_from_csv(series=series_id)
-excel.calculate_points(series=series_id)
-excel.full_run(series=series_id)
-excel.laps_led(series=series_id)
+exl.laps_led()
 
 print('Double checking Stage 1')
 stage = 1
-csv_col = str(col + 1)
+csv_col = str(col + stage)
 web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=stage)
 db.web_query(web)
 db.update_results(stage=stage)
 fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-excel.results_from_csv(series=series_id)
-web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
+exl.results_from_csv()
+
 
 print('Double checking Stage 2')
 stage = 2
-csv_col = str(col + 2)
+csv_col = str(col + stage)
 web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=stage)
 db.web_query(web)
 db.update_results(stage=stage)
 fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-excel.results_from_csv(series=series_id)
-web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
+exl.results_from_csv()
+
 
 # Finish
 stage = 0
-stage_lap = 0
 csv_col = str(col + 3)
 
+web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
 db.web_query(web)
 db.update_results(stage=stage)
 db.update_laps()
 fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
-excel.results_from_csv(series=series_id)
+exl.results_from_csv()
 
-excel.calculate_points(series=series_id)
-excel.laps_led(series=series_id)
-excel.export_pictures(series=series_id)
 
-track = '@TalladegaSuperS'
-hashtags = ['#Fr8Auctions250', '#NASCARPlayoffs']
-twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
-twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
+exl.calculate_points()
+exl.laps_led()
+exl.export_pictures()
+
+
+
