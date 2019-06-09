@@ -112,8 +112,9 @@ class Database:
                            driver['manufacturer'], 
                            driver['sponsor'])
                           )
+            else:
+                self.update_results(stage=-1)
         conn.commit()
-        print('\nResults DB initialized')
         c.close()
         conn.close()
         
@@ -137,7 +138,6 @@ class Database:
                            driver['driver id'], 
                            self.qry.race_info['race id']))
         conn.commit()
-        print('\nResults DB updated')
         c.close()
         conn.close()
 
@@ -154,7 +154,6 @@ class Database:
                            driver['driver id'],
                            self.qry.race_info['race id']))
         conn.commit()
-        print('\nLaps Led updated\n')
         c.close()
         conn.close()         
         
@@ -171,7 +170,6 @@ class Database:
                            driver['driver name']))
                 print(f"{driver['driver name']} (ID = {driver['driver id']}) was added to the database")
         conn.commit()
-        print('\nDriver database update complete')
         c.close()
         conn.close()
         
@@ -188,7 +186,6 @@ class Database:
                        self.qry.race_info['track length'],))
             print(f"{self.qry.race_info['track name']} (ID = {self.qry.race_info['track id']}) was added to the database")
         conn.commit()
-        print('\nTrack database update complete')
         c.close()
         conn.close()
         
@@ -260,7 +257,7 @@ class Fetch:
     def results_to_csv(self, race_id, stage_id, col):  
         driver_list = self.results(race_id, stage_id)
         driver_list.insert(0, col)
-        with open('results.csv', 'w', newline='') as f:
+        with open('tables/results.csv', 'w', newline='') as f:
             writer = csv.writer(f)
             for name in driver_list:
                 writer.writerow([name])
@@ -275,8 +272,22 @@ class Fetch:
                                GROUP BY Results.driver_id
                                ORDER BY SUM(laps_led) DESC""", 
                                params=(series, year), con=conn)
-        df.to_csv('laps led.csv')
+        df.to_csv('tables/laps led.csv')
         conn.close()
+        
+    def lap_results(self, series, year):       
+        conn = sqlite3.connect('NASCAR.db')
+        df = pd.read_sql_query("""SELECT driver_name, Results.race_id, laps_led FROM Results 
+                               JOIN Races ON Results.race_id = Races.race_id
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               WHERE series_id=? AND 
+                                     year=? AND 
+                                     Races.race_number>0 AND
+                                     laps_led IS NOT NULL
+                               ORDER BY Drivers.driver_name""", 
+                               params=(series, year), con=conn)
+        conn.close()
+        return df
     
     def all_drivers(self, series, year):
         conn = sqlite3.connect('NASCAR.db')
@@ -288,7 +299,7 @@ class Fetch:
                                ORDER BY driver_name""",
                                params=(series, year), con=conn)
         conn.close()
-        df.to_csv('results.csv')
+        df.to_csv('tables/results.csv')
         
     def ineligible_drivers(self, series, year):
         conn = sqlite3.connect('NASCAR.db')
@@ -299,10 +310,7 @@ class Fetch:
                                GROUP BY Results.driver_id
                                ORDER BY driver_name""",
                                params=(series, year), con=conn)
-#        print('\nIneligible drivers:\n')
-#        for driver in df['driver_name']:
-#            print(driver)
-        df.to_csv('results.csv')
+        df.to_csv('tables/results.csv')
         conn.close()
 
 
@@ -359,4 +367,4 @@ class LiveRace:
         cols = df.columns.tolist()
         cols = cols[-1:] + cols[:-1]
         df = df[cols]
-        df.to_csv('live race.csv')
+        df.to_csv('tables/live race.csv')

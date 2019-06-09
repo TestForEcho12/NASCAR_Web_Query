@@ -20,9 +20,9 @@ class points():
                                con=conn)
         conn.close()
         self.num_races = int(df['races'][0])
-        num_races_dict = {1:36, 2:33, 3:23}
-        self.total_num_races = num_races_dict[self.series]
-        self.num_races_left = num_races_dict[self.series] - self.num_races
+        num_races = {1:36, 2:33, 3:23}
+        self.total_num_races = num_races[self.series]
+        self.num_races_left = num_races[self.series] - self.num_races
         
     def drivers(self, num_races):
         conn = sqlite3.connect('NASCAR.db')
@@ -60,7 +60,7 @@ class points():
                                JOIN Races ON Results.race_id = Races.race_id
                                WHERE series_id = ? AND 
                                      year = ? AND 
-                                     Races.race_number <= ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
                                      win = 1 
                                """,
                                params=(self.series, self.year, num_races,),
@@ -98,7 +98,12 @@ class points():
                                    (ifnull(s1.stage, 0) + 
                                     ifnull(s2.stage, 0) + 
                                     ifnull(s3.stage, 0) + 
-                                    ifnull(f.finish, 0) -
+                                    (CASE
+                                        WHEN Races.race_number = 0 THEN
+                                            ifnull(f.stage, 0)
+                                        ELSE
+                                            ifnull(f.finish, 0)
+                                    END) -
                                     ifnull(penalty, 0)) AS pts
                                FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
@@ -310,7 +315,7 @@ class points():
 
 if __name__ == '__main__':
     
-    year = 2018
+    year = 2019
     series = 1
     
     p = points(series=series, year=year)
@@ -325,7 +330,9 @@ if __name__ == '__main__':
     p.points_delta()
     p.penalties(p.num_races)
     
-    p.total.to_csv('test.csv')
+    a = p.points
+    p.points.to_csv('tables/test.csv')
+    
     
     
 #    env = Environment(loader=FileSystemLoader('HTML'))

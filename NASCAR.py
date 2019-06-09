@@ -2,20 +2,19 @@ import WebQuery3
 import Database
 import excel
 import social
-import time
 import timer
 
 year = 2019
-series_id = 2
-race_id = 4815
-race_number = 5
-stage_length = 35
-col = 18
-track = '@ACSupdates'
-hashtags = ['#PAG300', '#NASCAR']
+series_id = 1
+race_id = 4789
+race_number = 15
+stage_length = 60
+col = 60
+track = '@MISpeedway'
+hashtags = ['#FireKeepersCasino400', '#NASCAR']
 
 # pause until racetime
-timer.run(timer.delay_start2(2019,3,16,17,0))
+timer.run(timer.delay_start2(2019,6,9,14,0))
 pause = 25
 
 
@@ -159,9 +158,6 @@ reddit.comment(url_id=reddit_id, comment=comment)
 # Post Race
 reddit_id = reddit.get_id(thread=2, series=series_id)
 reddit.comment(url_id=reddit_id, comment=comment)
+if series_id == 1:
+    twitter.manufacturer()
 
-#if series_id == 1:
-#    time.sleep(30)
-#    reddit_id = reddit.get_id('Scorecard')
-#    reddit.comment(url_id=reddit_id, comment=comment)
-#    twitter.manufacturer()

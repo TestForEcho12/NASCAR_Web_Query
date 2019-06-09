@@ -4,11 +4,11 @@ import excel
 
 
 year = 2019
-series_id = 3
-race_id = 4847
-race_number = 4
-stage_length = 70
-col = 14
+series_id = 2
+race_id = 4822
+race_number = 12
+stage_length = 25
+col = 46
 
 
 # set up live feed web object

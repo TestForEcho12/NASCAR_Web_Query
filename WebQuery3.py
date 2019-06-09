@@ -262,6 +262,7 @@ class Query:
         self.qry.open_browser()
         prev_lap = -1
         prev_flag = -1
+        print('\nRace monitoring has started\n')
         while True:
             self.qry.refresh_browser()
             self.qry.get_json()
@@ -286,8 +287,6 @@ class Query:
                 self.qry.get_race_info()
                 self.qry.get_race_status()
                 self.qry.fetch_names_from_DB()
-#                self._print_header(stage_lap=stage_lap)
-#                self._print_results()
                 self.html_results(stage_lap=stage_lap)
                 live.add_lap(self.qry.driver_list, self.qry.race_status)
                 break
@@ -296,8 +295,6 @@ class Query:
                 if lap != prev_lap or flag_state != prev_flag: 
                     self.qry.get_driver_info()
                     self.qry.fetch_names_from_DB()
-#                    self._print_header(stage_lap=stage_lap)
-#                    self._print_results()
                     self.html_results(stage_lap=stage_lap)
                     live.add_lap(self.qry.driver_list, self.qry.race_status)
                 prev_lap = lap
