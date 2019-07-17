@@ -11,6 +11,8 @@ class Points():
         self.series = series
         self.year = year
         self.database = 'NASCAR.db'
+        self.num_regular_season_races = {1:26, 2:26, 3:16}[series]
+        self.num_playoff_drivers = {1:16, 2:12, 3:8}[series]
         
     def get_races(self):
         conn = sqlite3.connect(self.database)
@@ -63,7 +65,7 @@ class Points():
         
         # Sum points
         self.points['Total Points'] = self.points.sum(axis=1)
-        self.points = self.points.sort_values('Total Points', ascending=False)
+        self.points.sort_values('Total Points', ascending=False, inplace=True)
         
         # Combine Daytona races
         if self.series == 1:
@@ -116,7 +118,7 @@ class Points():
                                        Races.series_id = ? AND
                                        Races.year = ? AND
                                        Races.race_number > 0""",
-                                       params=(driver, self.series, self.year,),
+                                       params=(driver, self.series, self.year),
                                        con=conn)
                 finish = df['finish'].tolist()
                 finish.sort()
@@ -127,19 +129,6 @@ class Points():
                 self.points.loc[index] = points_copy.loc[points_copy['Drivers'] == name].iloc[0]
                 self.points.loc[index, 'pos'] = 'T-'+str(pos)
             conn.close()
-            
-    def cutoff(self):
-        if not self.num_races > 26:
-            for index, row in self.points.iterrows():
-                driver = row['Drivers']
-                if driver not in self.playoff_drivers:
-                    self.points.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.points.loc[self.points['Drivers'] == self.last_in]['Total Points'])
-                elif driver not in self.eligible_winners:
-                    self.points.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.points.loc[self.points['Drivers'] == self.first_out]['Total Points'])
-                else:
-                    self.points.loc[index, '+/- Cutoff'] = '-'
-        else:
-            self.points.loc[:, '+/- Cutoff'] = '-'
                 
     def last_race_order(self):
         s = Points(series=self.series, year=self.year)
@@ -152,7 +141,6 @@ class Points():
     def points_delta(self):
         points = self.points.copy()        
         last_race = self.last_race.copy()
-        
         last_race = last_race.merge(points, how='outer', on='Drivers')
 
         points['pos'] = points.index + 1
@@ -165,96 +153,15 @@ class Points():
         last_race = last_race.reindex(self.points['Drivers'])
         self.points['delta'] = np.array(last_race['delta'])
 
-    def drivers(self):
-        conn = sqlite3.connect(self.database)
-        # Select all drivers that have run the given series and year
-        df = pd.read_sql_query("""SELECT driver_name FROM Results
-                                       JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                                       JOIN Races ON Results.race_id = Races.race_id
-                                       WHERE series_id = ? AND 
-                                           year = ? AND 
-                                           Races.race_number <= ?""", 
-                               params=(self.series, self.year, self.num_races,),
-                               con=conn)
-        self.all_drivers = df['driver_name'].unique()
-        self.eligible_drivers = []
-        for driver in self.all_drivers:
-            df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
-                                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                                           JOIN Races ON Results.race_id = Races.race_id
-                                           WHERE Drivers.driver_name = ? AND 
-                                                 Races.series_id = ? AND
-                                                 Races.year = ? AND
-                                                 ineligible IS NULL AND
-                                                 Races.race_number > 0 AND
-                                                 Races.race_number <= ?""",
-                                    params=(driver, self.series, self.year, self.num_races,),
-                                    con=conn)                                           
-            if df['COUNT(Results.race_id)'][0] == self.num_races:
-                self.eligible_drivers.append(driver)
-        conn.close()
-        
-    def winners(self):
-        conn = sqlite3.connect(self.database)
-        df = pd.read_sql_query("""SELECT driver_name, encumbered FROM Results 
-                                       JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                                       JOIN Races ON Results.race_id = Races.race_id
-                                           WHERE series_id = ? AND 
-                                           year = ? AND 
-                                           Races.race_number BETWEEN 1 AND ? AND
-                                           win = 1 """,
-                               params=(self.series, self.year, self.num_races,),
-                               con=conn)
-        self.winners = df['driver_name'].unique()
-        self.num_winners = len(self.winners)
-        # Drop encumbered
-        unencumbered = df[df.encumbered != 1]['driver_name'].unique()
-        
-        self.eligible_winners = []
-        for winner in unencumbered:
-            #Check that driver has run every race
-            df = pd.read_sql_query("""SELECT COUNT(Results.race_id) FROM Results
-                                           JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                                           JOIN Races ON Results.race_id = Races.race_id
-                                           WHERE Drivers.driver_name = ? AND 
-                                                 Races.series_id = ? AND
-                                                 Races.year = ? AND
-                                                 Races.race_number <= ? AND
-                                                 ineligible IS NULL AND
-                                                 Races.race_number > 0""",
-                                    params=(winner, self.series, self.year, self.num_races,),
-                                    con=conn)
-            if df['COUNT(Results.race_id)'][0] == self.num_races:
-                self.eligible_winners.append(winner)
-        conn.close()
-        self.num_eligible_winners = len(self.eligible_winners)
-        
-    def playoff_drivers(self):
-        drivers = self.points['Drivers'].tolist()
-        count = self.num_eligible_winners
-        self.playoff_drivers = self.eligible_winners.copy()
-        i = 0
-        while count < 16:
-            driver = drivers[i]
-            if driver not in self.eligible_winners and driver in self.eligible_drivers:
-                self.playoff_drivers.append(driver)
-                count += 1
-            i += 1
-        while True:
-            driver = drivers[i]
-            if driver not in self.eligible_winners:
-                self.first_out = driver
-                self.last_in = drivers[i-1]
-                break
-            i += 1
-        self.cut_line = i
-
-    def playoff_drivers2(self, num_races=None):
+    def playoff_drivers(self, num_races=None):
         if num_races is None:
             num_races = self.num_races
-        if num_races > 26:
-            num_races = 26
-        top = self.points.iloc[0:30]['Drivers']
+        if num_races > self.num_regular_season_races:
+            num_races = self.num_regular_season_races
+        
+        # Find eligible drivers that have run every race
+        points_to_qual = {1:30, 2:30, 3:20}
+        top = self.points.iloc[0:points_to_qual[self.series]]['Drivers']
         conn = sqlite3.connect(self.database)    
         df = pd.read_sql_query("""SELECT driver_name
                                FROM Results
@@ -265,10 +172,11 @@ class Points():
                                      Races.race_number BETWEEN 1 AND ?""",
                                params=(self.series, self.year, num_races),
                                con=conn)
-        df = df.groupby('driver_name').size()
+        df = df.groupby('driver_name').size()        
         run_all = df.where(df==num_races).dropna().index.tolist()
         playoff_eligible = top.where(top.isin(run_all)).dropna()
         
+        # Find winners
         df = pd.read_sql_query("""SELECT driver_name
                                FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
@@ -281,62 +189,40 @@ class Points():
                                con=conn)
         conn.close()
         winners = pd.Series(df['driver_name'].unique())
-        winners = winners.where(winners.isin(playoff_eligible).dropna())
-        return winners
-    '''
-    * playoff eligible drivers
-        - not labled ineligible
-        - run every race
-        - in top 30
         
-        - make 2 lists, top 30 from self.points and run_every_race
-        - have to be in both lists
-            
-    * regular season winners that are eligible
-        - Find all winners
-        - Are winners playoff_eligible
+        # Isolate winners who are also playoff eligible
+        self.eligible_winners = winners.where(winners.isin(playoff_eligible)).dropna()
         
-    * playoff drivers
-    '''
+        remaining = self.num_playoff_drivers - self.eligible_winners.size
+        others = playoff_eligible.where(~playoff_eligible.isin(winners)).dropna().reset_index(drop=True)
+        self.playoff_drivers = pd.concat([self.eligible_winners, others[:remaining]], ignore_index=True)
+        
+        self.last_in = others[remaining - 1]
+        self.first_out = others[remaining]
+        self.cut_line = int(self.points.loc[self.points['Drivers'] == self.last_in].index[0]) + 1
+        
+    def cutoff(self):
+        if not self.num_races > self.num_regular_season_races:
+            playoff_drivers = self.playoff_drivers.tolist()
+            eligible_winners = self.eligible_winners.tolist()
+            for index, row in self.points.iterrows():
+                driver = row['Drivers']
+                if driver not in playoff_drivers:
+                    self.points.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.points.loc[self.points['Drivers'] == self.last_in]['Total Points'])
+                elif driver not in eligible_winners:
+                    self.points.loc[index, '+/- Cutoff'] = row['Total Points'] - int(self.points.loc[self.points['Drivers'] == self.first_out]['Total Points'])
+                else:
+                    self.points.loc[index, '+/- Cutoff'] = '-'
+        else:
+            self.points.loc[:, '+/- Cutoff'] = '-'
 
-            
-    def penalties(self):
-        '''This method is currently building a dataframe self.penalty that copies
-        self.points but makes every value a bool for if the driver has a penalty
-        in that race. 
-        
-        Simply returning a list of the penalties seems easier'''
-        
-        conn = sqlite3.connect('NASCAR.db')
-        # Select all drivers that have run the given series and year with a penalty
-        df = pd.read_sql_query("""SELECT driver_name, Results.race_id FROM Results
-                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                               JOIN Races ON Results.race_id = Races.race_id
-                               WHERE series_id = ? AND 
-                                     year = ? AND 
-                                     Races.race_number <= ? AND
-                                     penalty IS NOT NULL""", 
-                               params=(self.series, self.year, self.num_races,),
-                               con=conn)
-        conn.close()
-        self.penalty = self.points
-        self.penalty = self.penalty.drop(['pos', 'delta', 'Total Points', 'Points Behind Leader', '+/- Cutoff'], axis=1)
-        self.penalty.loc[:, self.penalty.columns != 'Drivers'] = 0
-        for index, row in df.iterrows():
-            self.penalty.loc[self.penalty['Drivers'] == row['driver_name'], row['race_id']] = 1
-            
-    def export_points(self):
-        self.points.to_csv('tables/points.csv')
-        with open('tables/data.txt', 'w') as writer:
-            for driver in self.eligible_winners:
-                writer.write(driver + ',')
+    def calc_playoff_points(self, num_races=None):#, races=None):
+        if num_races is None:
+            num_races = self.num_races
 
-    def calc_playoff_points(self, num_races):
-        conn = sqlite3.connect('NASCAR.db')    
+        conn = sqlite3.connect(self.database)    
         df = pd.read_sql_query("""SELECT driver_name, 
-                                   Results.race_id, 
-                                   Races.race_number, 
-                                   Tracks.nickname,
+                                   Races.race_number,
                                    (ifnull(s1.playoff_stage, 0) + 
                                     ifnull(s2.playoff_stage, 0) + 
                                     ifnull(s3.playoff_stage, 0) + 
@@ -344,47 +230,338 @@ class Points():
                                FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                JOIN Races ON Results.race_id = Races.race_id
-                               JOIN Tracks ON Races.track_id = Tracks.track_id
                                LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
                                LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
                                LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
                                LEFT OUTER JOIN Points AS f ON Results.finish = f.position
                                WHERE series_id = ? AND 
                                      year = ? AND 
-                                     Races.race_number <= ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
                                      ineligible IS NULL""",
                                params=(self.series, self.year, num_races,),
                                con=conn)
         conn.close()
-        return df
+        
+        # Group by driver
+        self.playoff_points = df.pivot(index='driver_name', columns='race_number', values='pts')
+        cols = self.playoff_points.columns.values.tolist()
+    
+        # Sum points
+        self.playoff_points['Playoff Points'] = self.playoff_points.sum(axis=1)
+        
+        # Add regular season bonus
+        add_bonus = False
+        if num_races > self.num_regular_season_races:
+            add_bonus = True
+        elif num_races == self.num_regular_season_races:
+            if self.finish_exists(self.num_regular_season_races):
+                add_bonus = True
+        if add_bonus:
+            bonus = pd.DataFrame({'bonus': [15, 10, 8, 7, 6, 5, 4, 3, 2, 1]}, index=self.points['Drivers'][:10])
+            self.playoff_points['Regular Season Bonus'] = 0
+            self.playoff_points.loc[bonus.index, 'Regular Season Bonus'] = bonus['bonus']
+        else:
+            self.playoff_points['Regular Season Bonus'] = 0
+        self.playoff_points['Total Playoff Points'] = self.playoff_points['Playoff Points'] + self.playoff_points['Regular Season Bonus']
+
+        # Sort
+        self.playoff_points = self.playoff_points.reindex(self.points['Drivers'])
+        self.playoff_points.replace(to_replace=0, value=np.NaN, inplace=True)
+        self.playoff_points = self.playoff_points.sort_values('Total Playoff Points', ascending=False)
+        self.playoff_points.reset_index(inplace=True)
+        
+        # Update column order
+        self.playoff_points['pos'] = self.playoff_points.index + 1
+        self.playoff_points['delta'] = np.NaN
+        cols = ['pos', 'delta', 'Drivers', 'Total Playoff Points', 'Playoff Points', 'Regular Season Bonus'] + cols
+        self.playoff_points = self.playoff_points[cols]
+    
+    def calc_stats(self, num_races=None, races=None):
+        if num_races is None:
+            num_races = self.num_races
+        if races is None:
+            races = self.races
+        conn = sqlite3.connect(self.database)    
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                  Results.race_id,
+                                  Results.finish
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)
+        # Group by driver
+        self.stats = df.pivot(index='driver_name', columns='race_id', values='finish')
+        
+        # Sort
+        self.stats = self.stats.reindex(self.points['Drivers'])
+        
+        # Stats
+        # Playoff Points
+        self.stats['playoff points'] = 0
+        pp = self.playoff_points[['Drivers', 'Total Playoff Points']].dropna().set_index('Drivers')
+        self.stats.loc[pp.index, 'playoff points'] = pp['Total Playoff Points']
+        # Wins
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                  Results.finish
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND
+                                     year = ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL AND
+                                     Results.finish = 1""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)                               
+        wins = df.groupby('driver_name').sum()
+        self.stats['wins'] = 0
+        self.stats.loc[wins.index, 'wins'] = wins['finish']
+        # Stage Wins
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                   Results.race_id,
+                                   (ifnull(s1.playoff_stage, 0) + 
+                                    ifnull(s2.playoff_stage, 0) + 
+                                    ifnull(s3.playoff_stage, 0)) AS pts
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
+                               LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
+                               LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)
+        stages = df.groupby('driver_name').sum()
+        self.stats['stage wins'] = 0
+        self.stats.loc[stages.index, 'stage wins'] = stages['pts']
+        # Poles
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                  Results.qual
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND
+                                     year = ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL AND
+                                     Results.qual = 1""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)                               
+        poles = df.groupby('driver_name').sum()
+        self.stats['poles'] = 0
+        self.stats.loc[poles.index, 'poles'] = poles['qual']
+        # Average Finish
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                  Results.finish
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND
+                                     year = ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)     
+        avg = df.groupby('driver_name').mean().round(1)
+        self.stats['average'] = 0
+        self.stats.loc[avg.index, 'average'] = avg['finish']
+        # Top5
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                  Results.finish
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND
+                                     year = ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL AND
+                                     Results.finish <= 5""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)                               
+        top5 = df.groupby('driver_name').count()
+        self.stats['top 5'] = 0
+        self.stats.loc[top5.index, 'top 5'] = top5['finish']
+        # Laps Lead
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                  Results.laps_led
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               WHERE series_id = ? AND
+                                     year = ? AND
+                                     Races.race_number BETWEEN 1 AND ? AND
+                                     ineligible IS NULL""",
+                               params=(self.series, self.year, num_races,),
+                               con=conn)     
+        laps = df.groupby('driver_name').sum()
+        self.stats['laps'] = 0
+        self.stats.loc[laps.index, 'laps'] = laps['laps_led']
+        conn.close()
+        
+        # Points
+        self.stats.reset_index(inplace=True)
+        self.stats['pos'] = self.points['pos']
+        self.stats['delta'] = self.points['delta']
+        self.stats['points'] = self.points['Total Points']
+        self.stats.replace(to_replace=0, value=np.NaN, inplace=True)
+
+        # Update column order
+        cols = races[races['race_number'] > 0].sort_values('race_number').index.tolist()
+        cols = ['pos', 'delta', 'Drivers', 'points', 'playoff points', 'wins', 'stage wins', 'poles', 'average', 'top 5', 'laps'] + cols
+        self.stats = self.stats[cols]
+
+    def calc_playoffs(self):
+        rounds = {1:3, 2:2, 3:2}[self.series]
+        drivers_eliminated = {1:4, 2:4, 3:2}[self.series]
+        races_per_round = 3
+        
+        if self.num_races < self.num_regular_season_races:
+            return
+
+        conn = sqlite3.connect(self.database)   
+        df = pd.read_sql_query("""SELECT driver_name, 
+                                   Races.race_number, 
+                                   (ifnull(s1.stage, 0) + 
+                                    ifnull(s2.stage, 0) + 
+                                    ifnull(f.finish, 0) -
+                                    ifnull(penalty, 0)) AS pts
+                               FROM Results
+                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Races ON Results.race_id = Races.race_id
+                               LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
+                               LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
+                               LEFT OUTER JOIN Points AS f ON Results.finish = f.position
+                               WHERE series_id = ? AND 
+                                     year = ? AND 
+                                     Races.race_number > ? AND
+                                     ineligible IS NULL""",
+                               params=(self.series, self.year, self.num_regular_season_races),
+                               con=conn)
+        conn.close()
+        # Group by driver
+        self.playoffs = df.pivot(index='driver_name', columns='race_number', values='pts')
+        self.playoffs = self.playoffs[self.playoffs.index.isin(self.playoff_drivers)]
+
+        self.num_races = 32
+        # Find where we are in the playoffs
+        current_round = 0
+        for i in range(1, rounds + 1):
+            last_race_of_round = self.num_regular_season_races + i*races_per_round
+            if self.num_races < last_race_of_round + 1:
+                current_round = i
+                if self.num_races == last_race_of_round:
+                    end_of_round = self.finish_exists(self.num_races)
+                else:
+                    end_of_round = False
+                break
+        if current_round == 0:
+            end_of_round = self.finish_exists(self.num_races)
+            current_round = rounds
+            finale = True
+        else:
+            finale = False
+        
+        self.playoffs['playoff points'] = 0
+        for i in range(current_round):
+            remaining_drivers = self.playoffs.head(self.num_playoff_drivers - i*drivers_eliminated).index
+            pp = self.playoff_points[self.playoff_points['Drivers'].isin(remaining_drivers)]
+            pp.set_index('Drivers', inplace=True)
+            pp.drop(['pos', 'delta', 'Total Playoff Points', 'Playoff Points'], axis=1, inplace=True)
+            races = self.num_regular_season_races + i*races_per_round + 1 # +1 for reg season bonus
+            pp = pp.iloc[:, :races]
+            pp['Total Playoff Points'] = pp.sum(axis=1)
+            
+            self.playoffs['playoff points'] = pp.loc[remaining_drivers]['Total Playoff Points']
+            start = i*races_per_round
+            end = (i+1)*races_per_round
+            points = self.playoffs.iloc[:, start:end]
+            self.playoffs['points'] = 2000 + i*1000 + points.sum(axis=1)
+            self.playoffs['total points'] = self.playoffs['points'] + self.playoffs['playoff points']
+            self.playoffs.sort_values('total points', ascending=False, inplace=True)
+
+                
+        return self.playoffs
+
+
+
+
+    def finish_exists(self, race_num):
+            conn = sqlite3.connect(self.database)
+            c = conn.cursor()
+            c.execute("""SELECT EXISTS(SELECT finish FROM Results 
+                         JOIN Races ON Results.race_id = Races.race_id
+                         WHERE series_id = ? AND
+                         year = ? AND
+                         race_number = ?)""",
+                        (self.series, self.year, race_num))
+            exists = bool(c.fetchone()[0])
+            c.close()
+            conn.close()
+            return exists
+
+    def export_points(self):
+        self.points.to_csv('tables/points.csv',
+                           header=False,
+                           index=False)
+        self.playoff_points.to_csv('tables/playoff points.csv',
+                                   header=False,
+                                   index=False)
+        self.stats.to_csv('tables/stats.csv',
+                          header=False,
+                          index=False)
+        # Points Data
+        with open('tables/data.txt', 'w') as writer:
+            winners = self.eligible_winners.tolist()
+            if winners:
+                s = ''
+                for driver in winners:
+                    s += driver + ','
+                s = s[:-1] + '\n'
+                writer.write(s)
+            else:
+                writer.write('None\n')
+            writer.write(str(self.cut_line))
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
-
-    year = 2019
+    now = dt.now()
+    
+    year = 2018
     series = 1
     
     p = Points(series=series, year=year)
-    p.get_races()
+    p.get_races()   
     p.calc_points()
-    p.drivers()
-    p.winners()
     p.ties()
-    p.playoff_drivers()
-    p.cutoff()
     p.last_race_order()
     p.points_delta()
-#    p.penalties()
+    p.playoff_drivers()
+    p.cutoff()
+    p.calc_playoff_points()
+    p.calc_stats()
     
-    now = dt.now()
-    b = p.playoff_drivers2()
+    a = p.calc_playoffs()
+
+    
+    p.export_points()
     print(dt.now() - now)
-
-    a = p.points
-
-    
-
-#    p.export_points()
 
 
 
