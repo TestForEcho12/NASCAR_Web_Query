@@ -6,15 +6,15 @@ import timer
 
 year = 2019
 series_id = 3
-race_id = 4854
-race_number = 12
-stage_length = 35
-col = 46
-track = '@ChicagolndSpdwy'
-hashtags = ['#CampingWorld225', '#NASCAR']
+race_id = 4856
+race_number = 15
+stage_length = 40
+col = 58
+track = '@EldoraSpeedway'
+hashtags = ['#EldoraDirtDerby', '#NASCAR']
 
 # pause until racetime
-timer.run(timer.delay_start2(2019,6,28,21,0))
+timer.run(timer.delay_start2(2019,8,1,21,0))
 pause = 15
 
 
@@ -42,12 +42,6 @@ fetch.results_to_csv(race_id=race_id, stage_id=-1, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
 
 exl = excel.Excel(year=year, series=series_id)
-#exl.all_drivers()
-#exl.ineligible_drivers()
-#exl.results_from_csv()
-#exl.calculate_points()
-#exl.full_run()
-#exl.laps_led()
 exl.pre_race()
 
 # Set up live race position tracking
@@ -73,10 +67,6 @@ fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
 live.get_results()
 
-#exl.results_from_csv()
-#exl.calculate_points()
-#exl.laps_led()
-#exl.export_pictures()
 exl.in_race()
 
 twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
@@ -110,10 +100,6 @@ fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
 live.get_results()
 
-#exl.results_from_csv()
-#exl.calculate_points()
-#exl.laps_led()
-#exl.export_pictures()
 exl.in_race()
 
 twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
@@ -147,10 +133,6 @@ fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
 live.get_results()
 
-#exl.results_from_csv()
-#exl.calculate_points()
-#exl.laps_led()
-#exl.export_pictures()
 exl.in_race()
 
 twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
@@ -165,3 +147,4 @@ reddit_id = reddit.get_id(thread=2, series=series_id)
 reddit.comment(url_id=reddit_id, comment=comment)
 if series_id == 1:
     twitter.manufacturer()
+
