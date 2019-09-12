@@ -54,6 +54,7 @@ class Database:
                   length REAL,
                   nickname TEXT,
                   type TEXT,
+                  twitter TEXT,
                   PRIMARY KEY(track_id)
                   )""")
         # init drivers database
@@ -185,6 +186,14 @@ class Database:
                        self.qry.race_info['track name'],
                        self.qry.race_info['track length'],))
             print(f"{self.qry.race_info['track name']} (ID = {self.qry.race_info['track id']}) was added to the database")
+        else:
+            c.execute('UPDATE Tracks SET track_name=? WHERE track_id=?',
+                      (self.qry.race_info['track name'], 
+                       self.qry.race_info['track id']))
+            c.execute('UPDATE Tracks SET length=? WHERE track_id=?',
+                      (self.qry.race_info['track length'], 
+                       self.qry.race_info['track id']))
+            print(f"{self.qry.race_info['track name']} was updated in the database")
         conn.commit()
         c.close()
         conn.close()
@@ -206,25 +215,25 @@ class Database:
                        race_number,
                        stage_length,))
         else:
-            c.execute('UPDATE Races SET series_id = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET series_id=? WHERE race_id=?',
                       (self.qry.race_info['series id'], 
                        self.qry.race_info['race id']))
-            c.execute('UPDATE Races SET track_id = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET track_id=? WHERE race_id=?',
                       (self.qry.race_info['track id'], 
                        self.qry.race_info['race id']))
-            c.execute('UPDATE Races SET race_name = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET race_name=? WHERE race_id=?',
                       (self.qry.race_info['race name'], 
                        self.qry.race_info['race id']))
-            c.execute('UPDATE Races SET total_laps = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET total_laps=? WHERE race_id=?',
                       (self.qry.race_status['total laps'], 
                        self.qry.race_info['race id']))
-            c.execute('UPDATE Races SET year = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET year=? WHERE race_id=?',
                       (year, 
                        self.qry.race_info['race id']))
-            c.execute('UPDATE Races SET race_number = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET race_number=? WHERE race_id=?',
                       (race_number, 
                        self.qry.race_info['race id']))
-            c.execute('UPDATE Races SET stage_length = ? WHERE race_id=?',
+            c.execute('UPDATE Races SET stage_length=? WHERE race_id=?',
                       (stage_length, 
                        self.qry.race_info['race id']))
         conn.commit()
@@ -235,10 +244,10 @@ class Database:
 class Fetch:
     
     def __init__(self):
-        pass
+        self.database = 'NASCAR.db'
         
     def results(self, race_id, stage_id):
-        conn = sqlite3.connect('NASCAR.db')
+        conn = sqlite3.connect(self.database)
         c = conn.cursor()
         stage = stages[stage_id]
         sql = f"""SELECT driver_name FROM Drivers JOIN Results ON 
@@ -264,7 +273,7 @@ class Fetch:
         print('\ncsv. created')
         
     def laps_to_csv(self, series, year):
-        conn = sqlite3.connect('NASCAR.db')
+        conn = sqlite3.connect(self.database)
         df = pd.read_sql_query("""SELECT driver_name, SUM(laps_led) FROM Results 
                                JOIN Races ON Results.race_id = Races.race_id
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
@@ -276,10 +285,11 @@ class Fetch:
         conn.close()
         
     def lap_results(self, series, year):       
-        conn = sqlite3.connect('NASCAR.db')
-        df = pd.read_sql_query("""SELECT driver_name, Results.race_id, laps_led FROM Results 
+        conn = sqlite3.connect(self.database)
+        df = pd.read_sql_query("""SELECT driver_name, Results.race_id, laps_led, Tracks.length FROM Results 
                                JOIN Races ON Results.race_id = Races.race_id
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                               JOIN Tracks ON Races.track_id = Tracks.track_id
                                WHERE series_id=? AND 
                                      year=? AND 
                                      Races.race_number>0 AND
@@ -290,7 +300,7 @@ class Fetch:
         return df
     
     def all_drivers(self, series, year):
-        conn = sqlite3.connect('NASCAR.db')
+        conn = sqlite3.connect(self.database)
         df = pd.read_sql_query("""SELECT driver_name, car_number, manufacturer FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                JOIN Races ON Results.race_id = Races.race_id
@@ -299,10 +309,10 @@ class Fetch:
                                ORDER BY driver_name""",
                                params=(series, year), con=conn)
         conn.close()
-        df.to_csv('tables/results.csv')
+        df.to_csv('tables/drivers.csv', header=False, index=False)
         
     def ineligible_drivers(self, series, year):
-        conn = sqlite3.connect('NASCAR.db')
+        conn = sqlite3.connect(self.database)
         df = pd.read_sql_query("""SELECT driver_name FROM Results
                                JOIN Drivers ON Results.driver_id = Drivers.driver_id
                                JOIN Races ON Results.race_id = Races.race_id
@@ -310,8 +320,26 @@ class Fetch:
                                GROUP BY Results.driver_id
                                ORDER BY driver_name""",
                                params=(series, year), con=conn)
-        df.to_csv('tables/results.csv')
+        df.to_csv('tables/ineligible.csv')
         conn.close()
+        
+    def track_id_from_race_id(self, race_id):
+        conn = sqlite3.connect(self.database)
+        c = conn.cursor()
+        c.execute('SELECT track_id FROM Races WHERE race_id=?', (race_id,))
+        track_id = c.fetchone()
+        c.close()
+        conn.close()
+        return track_id[0]
+        
+    def twitter_from_track_id(self, track_id):
+        conn = sqlite3.connect(self.database)
+        c = conn.cursor()
+        c.execute('SELECT twitter FROM Tracks WHERE track_id=?', (track_id,))
+        twitter = c.fetchone()
+        c.close()
+        conn.close()
+        return twitter[0]
 
 
 class LiveRace:

@@ -3,6 +3,7 @@ import sys
 import time
 import social
 import timer
+import pandas as pd
 
 
 def query(year, series_id, race_id, practice_id, practice_type):
@@ -43,9 +44,11 @@ def query(year, series_id, race_id, practice_id, practice_type):
         for driver in drivers:
             web.driver_list.append({'driver name': driver['driver_name']})
     else:
-        drivers = web.json_dict['10-Lap-Average']
-        for driver in drivers:
-            web.driver_list.append({'driver name': driver['dName']})
+        drivers = web.json_dict
+        df = pd.DataFrame(web.json_dict)
+        df.sort_values('Con10LapRank', inplace=True)
+        for index, driver in df.head(10).iterrows():
+            web.driver_list.append({'driver name': driver['FullName']})
     web.clean_driver_names()
     return web.driver_list
 
@@ -60,9 +63,9 @@ def comment(series, practice_type, drivers, practice_header):
                      2: '2nd',
                      3: 'final',
                      }
-    srs = {1: 'Cup',
-           2: 'Xfinity',
-           3: 'Truck',}
+    srs = {1: '@NASCAR',
+           2: '@NASCAR_XFINITY',
+           3: '@NASCAR_Trucks',}
     if practice_type == 1:
         comment = f'Fastest single laps from {tweet_headers[practice_header]} {srs[series]} practice:\n'
     else:    
@@ -76,25 +79,26 @@ def comment(series, practice_type, drivers, practice_header):
 
 if __name__ == '__main__':
     year = 2019
-    series = 1
-    race_id = 4789                  #4823            #4789 
-    track = '@MISpeedway'
-    hashtags = ['#FireKeepersCasino400', '#NASCAR',]       #LTiPrinting250    #FireKeepersCasino400
-    timer.run(timer.delay_start2(2019,6,7,16,55))
+    series = 2
+    race_id = 4830
+    track = '@WGI'
+    hashtags = ['#Zippo200', '#NASCAR',]
+    timer.run(timer.delay_start2(2019,8,2,13,30))
     
-    practice_id = 2
-    practice_header = 3
+    practice_id = 1
+    practice_header = 1
     practice_type = 1 # 1 = fastest lap, 2 = 10 lap average  
     drivers = query(year, series, race_id, practice_id, practice_type)
     com = comment(series, practice_type, drivers, practice_header)
     twitter = social.twitter(series, track, hashtags)
     tweet_id = twitter.practice(com, reply_id=0)
     
-    practice_id = 3
-    practice_header = 3
+    practice_id = 1
+    practice_header = 1
     practice_type = 2
     drivers = query(year, series, race_id, practice_id, practice_type)
     com = comment(series, practice_type, drivers, practice_header)
+    print(com)
     twitter = social.twitter(series, track, hashtags)
     tweet_id = twitter.practice(com, reply_id=tweet_id)   
     
