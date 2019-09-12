@@ -498,6 +498,7 @@ class Points():
             last_race_of_round = self.num_regular_season_races + i*races_per_round
             if self.num_races < last_race_of_round + 1:
                 current_round = i
+                race_in_round = races_per_round - (last_race_of_round - self.num_races)
                 if self.num_races == last_race_of_round:
                     end_of_round = self.finish_exists(self.num_races)
                 else:
@@ -514,7 +515,7 @@ class Points():
         for i in range(current_round):
             remaining_drivers = self.playoffs.head(self.num_playoff_drivers - i*drivers_eliminated).index.to_series().rename('Drivers')
             num_remaining_drivers = remaining_drivers.size
-            
+
             # Get remaining drivers's playoff points
             pp = self.playoff_points[self.playoff_points['Drivers'].isin(remaining_drivers)]
             pp = pp.merge(remaining_drivers, how='outer', on='Drivers')
@@ -529,7 +530,7 @@ class Points():
             self.playoffs['playoff points'].iloc[:num_remaining_drivers] = pp.loc[remaining_drivers]['Total Playoff Points']
             # Sum points for round
             start = i*races_per_round
-            end = (i+1)*races_per_round
+            end = race_in_round
             points = self.playoffs.iloc[:num_remaining_drivers, start:end]
             if 'points' not in self.playoffs.columns:
                 self.playoffs['points'] = np.NaN
@@ -537,7 +538,7 @@ class Points():
             # Sum total points
             self.playoffs['total points'] = self.playoffs['points'] + self.playoffs['playoff points']
             self.playoffs.sort_values('total points', ascending=False, inplace=True)
-            
+
             if end_of_round and i+1 == current_round:
                 # Reset points to X000
                 num_remaining_drivers -= drivers_eliminated
@@ -588,8 +589,11 @@ class Points():
             self.playoffs.sort_values('total points', ascending=False, inplace=True)
             
         # Formatting 
+        self.playoffs.reset_index(inplace=True)
+        self.playoffs['pos'] = self.playoffs.index + 1
+        self.playoffs['delta'] = np.NaN
         self.playoffs['cutoff'] = np.NaN
-        cols = ['total points', 'cutoff', 'points', 'playoff points'] + cols
+        cols = ['pos', 'delta', 'driver_name', 'total points', 'cutoff', 'points', 'playoff points'] + cols
         self.playoffs = self.playoffs[cols]
         self.playoffs.replace(to_replace=0, value=np.NaN, inplace=True)
         return self.playoffs
@@ -622,9 +626,9 @@ class Points():
         self.stats.to_csv('tables/stats.csv',
                           header=False,
                           index=False)
-        self.playoffs.to_csv('tables/playoffs.csv')#,
-#                             header=False,
-#                             index=False)
+        self.playoffs.to_csv('tables/playoffs.csv',
+                             header=False,
+                             index=False)
         # Points Data
         with open('tables/data.txt', 'w') as writer:
             winners = self.eligible_winners.tolist()
@@ -646,8 +650,8 @@ class Points():
 if __name__ == '__main__':
     now = dt.now()
     
-    year = 2018
-    series = 1
+    year = 2019
+    series = 3
     
     p = Points(series=series, year=year)
     p.get_races()   

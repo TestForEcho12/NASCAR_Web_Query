@@ -4,11 +4,11 @@ import excel
 
 
 year = 2019
-series_id = 2
-race_id = 4822
-race_number = 12
-stage_length = 25
-col = 46
+series_id = 1
+race_id = 4799
+race_number = 25
+stage_length = 100
+col = 100
 
 
 # set up live feed web object
@@ -28,18 +28,14 @@ db.add_race(year=year, race_number=race_number, stage_length=stage_length)
 db.add_results()
 
 # Qual results to Excel
-exl = excel.Excel(year=year, series=series_id)
 csv_col = str(col)
 fetch.all_drivers(series=series_id, year=year)
-exl.all_drivers()
 fetch.ineligible_drivers(series=series_id, year=year)
-exl.ineligible_drivers()
 fetch.results_to_csv(race_id=race_id, stage_id=-1, col=csv_col)
-exl.results_from_csv()
-exl.calculate_points()
-exl.full_run()
 fetch.laps_to_csv(series=series_id, year=year)
-exl.laps_led()
+
+exl = excel.Excel(year=year, series=series_id)
+exl.pre_race()
 
 print('Double checking Stage 1')
 stage = 1
@@ -71,12 +67,6 @@ db.update_results(stage=stage)
 db.update_laps()
 fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
 fetch.laps_to_csv(series=series_id, year=year)
-exl.results_from_csv()
 
-
-exl.calculate_points()
-exl.laps_led()
-exl.export_pictures()
-
-
+exl.in_race()
 

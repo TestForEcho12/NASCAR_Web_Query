@@ -5,17 +5,16 @@ import social
 import timer
 
 year = 2019
-series_id = 3
-race_id = 4856
-race_number = 15
-stage_length = 40
-col = 58
-track = '@EldoraSpeedway'
-hashtags = ['#EldoraDirtDerby', '#NASCAR']
+series_id = 1
+race_id = 4800
+race_number = 26
+stage_length = 50
+col = 104
+hashtags = ['#Brickyard400', '#NASCAR']
 
 # pause until racetime
-timer.run(timer.delay_start2(2019,8,1,21,0))
-pause = 15
+timer.run(timer.delay_start2(2019,9,8,14,0))
+pause = 30
 
 
 # set up live feed web object
@@ -49,9 +48,11 @@ live = Database.LiveRace()
 live.drop_table()
 live.add_table(qry.qry.driver_list)
 
-# get reddit thread id
+# Set up social
 reddit = social.reddit()
 reddit_id = reddit.get_id(thread=1, series=series_id)
+track_id = fetch.track_id_from_race_id(race_id)
+track = fetch.twitter_from_track_id(track_id)
 
 
 # Stage 1
@@ -70,7 +71,7 @@ live.get_results()
 exl.in_race()
 
 twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
-twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
+tweet_id = twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
 reddit = social.reddit()
 comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
 reddit.comment(url_id=reddit_id, comment=comment)
@@ -103,7 +104,7 @@ live.get_results()
 exl.in_race()
 
 twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
-twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
+tweet_id = twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
 reddit = social.reddit()
 comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
 reddit.comment(url_id=reddit_id, comment=comment)
@@ -136,7 +137,7 @@ live.get_results()
 exl.in_race()
 
 twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
-twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
+tweet_id = twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
 reddit = social.reddit()
 comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
 reddit.comment(url_id=reddit_id, comment=comment)
@@ -146,5 +147,36 @@ reddit.comment(url_id=reddit_id, comment=comment)
 reddit_id = reddit.get_id(thread=2, series=series_id)
 reddit.comment(url_id=reddit_id, comment=comment)
 if series_id == 1:
-    twitter.manufacturer()
+    twitter.manufacturer(tweet_id)
 
+
+
+
+
+#import practice2
+#import excel
+#import timer
+#import social
+#import Database
+#
+#year = 2019
+#series = 1
+#race_id = 4800
+#practice_id = 3
+#hashtags = ['#Brickyard400', '#NASCAR',]
+#timer.run(timer.delay_start2(2019,9,7,14,25))
+#
+#fetch = Database.Fetch()
+#track_id = fetch.track_id_from_race_id(race_id)
+#track = fetch.twitter_from_track_id(track_id)
+#
+#p = practice2.Practice(year, series, race_id, practice_id)
+#p.query()
+#p.comment(track, hashtags)
+#p.excel()
+#
+#e = excel.v2(year, series)
+#e.practice()
+#
+#t = social.twitter(series, track, hashtags)
+#t.practice2(p.com)
