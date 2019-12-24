@@ -15,22 +15,30 @@ class Points():
         self.num_playoff_drivers = {1:16, 2:12, 3:8}[series]
         self.total_num_races = {1:36, 2:33, 3:23}[series]
         
-    def get_races(self):
+    def get_races(self, race_num=100):
         conn = sqlite3.connect(self.database)
         df = pd.read_sql_query("""SELECT race_id, Races.track_id, race_number, Tracks.nickname FROM Races
-                                       JOIN Tracks ON Races.track_id = Tracks.track_id
-                                       WHERE series_id = ? AND
-                                           year = ? AND
-                                           race_number IS NOT NULL""",
-                               params=(self.series, self.year),
-                               con=conn)
+                                   JOIN Tracks ON Races.track_id = Tracks.track_id
+                                   WHERE series_id = ? AND
+                                       year = ? AND
+                                       race_number BETWEEN 0 AND ?""",
+                           params=(self.series, self.year, race_num),
+                           con=conn)
         conn.close()
-        self.races = df.set_index('race_id')
-        self.num_races = int(self.races['race_number'].max())
+        if race_num < 1:
+            self.races = None
+            self.num_races = 0
+        else:
+            self.races = df.set_index('race_id')
+            self.num_races = int(self.races['race_number'].max())
 
     def calc_points(self, num_races=None):
         if num_races is None:
             num_races = self.num_races
+        if num_races == 0:
+            self.points = None
+            return
+        
         conn = sqlite3.connect(self.database)    
         df = pd.read_sql_query("""SELECT driver_name, 
                                    Races.race_number, 
@@ -95,6 +103,8 @@ class Points():
         self.points = self.points[cols]
       
     def ties(self):
+        if self.points is None:
+            return
         tied_points = self.points[self.points.duplicated(subset='Total Points', keep=False)]
         tied_points = tied_points['Total Points'].unique()
         points_copy = self.points.copy()
@@ -125,38 +135,36 @@ class Points():
                 self.points.loc[index] = points_copy.loc[points_copy['Drivers'] == name].iloc[0]
                 self.points.loc[index, 'pos'] = 'T-'+str(pos)
             conn.close()
-                
-    def last_race_points(self):
-        s = Points(series=self.series, year=self.year)
-        last_race_num = self.num_races - 1
-        s.calc_points(last_race_num)
-        s.ties()       
-        self.last_race_points = s.points
     
-    def points_delta(self):
-        points = self.points.copy()        
-        last_race = self.last_race_points.copy()
-        last_race = last_race.merge(points, how='outer', on='Drivers')
-
-        points['pos'] = points.index + 1
-        points = points.set_index('Drivers')
-        last_race['pos'] = last_race.index + 1
-        last_race = last_race.set_index('Drivers')        
-        
-        last_race['delta'] = last_race['pos'] - points['pos']
-        last_race['delta'].replace(to_replace=0, value=np.NaN, inplace=True)
-        last_race = last_race.reindex(self.points['Drivers'])
-        self.points['delta'] = np.array(last_race['delta'])
+    def points_delta(self, last=None):
+        if last is None:
+            self.points['delta'] = np.NaN
+        else:
+            points = self.points.copy()        
+            last_race = last.points.copy()
+            last_race = last_race.merge(points, how='outer', on='Drivers')
+    
+            points['pos'] = points.index + 1
+            points = points.set_index('Drivers')
+            last_race['pos'] = last_race.index + 1
+            last_race = last_race.set_index('Drivers')        
+            
+            last_race['delta'] = last_race['pos'] - points['pos']
+            last_race['delta'].replace(to_replace=0, value=np.NaN, inplace=True)
+            last_race = last_race.reindex(self.points['Drivers'])
+            self.points['delta'] = np.array(last_race['delta'])
 
     def playoff_drivers(self, num_races=None):
+        # Set num_races = to num regular season races
         if num_races is None:
             num_races = self.num_races
         if num_races > self.num_regular_season_races:
             num_races = self.num_regular_season_races
-        
+            
         # Find eligible drivers that have run every race
         points_to_qual = {1:30, 2:30, 3:20}
         top = self.points.iloc[0:points_to_qual[self.series]]['Drivers']
+        
         conn = sqlite3.connect(self.database)    
         df = pd.read_sql_query("""SELECT driver_name
                                FROM Results
@@ -211,7 +219,7 @@ class Points():
         else:
             self.points.loc[:, '+/- Cutoff'] = '-'
 
-    def calc_playoff_points(self, num_races=None):
+    def calc_playoff_points(self, reg_season=None, num_races=None):
         if num_races is None:
             num_races = self.num_races
             pts = self.points
@@ -222,6 +230,8 @@ class Points():
             s.calc_points(num_races)
             s.ties()
             pts = s.points
+        if num_races == 0:
+            return
 
         conn = sqlite3.connect(self.database)    
         df = pd.read_sql_query("""SELECT driver_name, 
@@ -259,8 +269,11 @@ class Points():
         elif num_races == self.num_regular_season_races:
             if self.finish_exists(self.num_regular_season_races):
                 add_bonus = True
+        if not reg_season:
+            add_bonus = False
+                
         if add_bonus:
-            bonus = pd.DataFrame({'bonus': [15, 10, 8, 7, 6, 5, 4, 3, 2, 1]}, index=pts['Drivers'][:10])
+            bonus = pd.DataFrame({'bonus': [15, 10, 8, 7, 6, 5, 4, 3, 2, 1]}, index=reg_season.points['Drivers'][:10])
             self.playoff_points['Regular Season Bonus'] = 0
             self.playoff_points.loc[bonus.index, 'Regular Season Bonus'] = bonus['bonus']
         else:
@@ -283,38 +296,44 @@ class Points():
         self.playoff_points = self.playoff_points[cols]
         
     def playoff_points_ties(self):
-        ties = self.playoff_points[self.playoff_points.duplicated(subset='Total Playoff Points', keep=False)]
-        ties = ties['Total Playoff Points'].unique()
-        ties = ties[~np.isnan(ties)]
-        for tie in ties:
-            tied_drivers = self.playoff_points.loc[self.playoff_points['Total Playoff Points'] == tie]
-            pos = tied_drivers['pos'].min()
-            self.playoff_points.loc[self.playoff_points['Total Playoff Points'] == tie, 'pos'] = 'T-'+str(pos)
+        tied_points = self.playoff_points[self.playoff_points.duplicated(subset='Total Playoff Points', keep=False)]
+        tied_points = tied_points['Total Playoff Points'].unique()
+        pp_copy = self.playoff_points.copy()
+        for points in tied_points:
+            tied_total = self.playoff_points.loc[self.playoff_points['Total Playoff Points'] == points]
+            drivers = tied_total['Drivers'].tolist()
+            indices = tied_total.index.tolist()
+            positions = tied_total['pos'].tolist()
+            pos = min(positions)
+            tie_dict = {}
+            for driver in drivers:
+                pts_pos = self.points[self.points['Drivers'] == driver].index[0]
+                tie_dict[driver] = pts_pos
+            tiebreaker = list(sorted(tie_dict.items(), key=lambda x:x[1]))
+            tiebreaker = [i[0] for i in tiebreaker]
+            for index, name in zip(indices, tiebreaker):
+                self.playoff_points.loc[index] = pp_copy.loc[pp_copy['Drivers'] == name].iloc[0]
+                self.playoff_points.loc[index, 'pos'] = 'T-'+str(pos)   
+        
+    def playoff_points_delta(self, last=None):
+        if last is None:
+            self.playoff_points['delta'] = np.NaN
+        else:
+            playoff_points = self.playoff_points.copy()        
+            last_race = last.playoff_points.copy()
+            new_drivers = np.setdiff1d(playoff_points['Drivers'], last_race['Drivers'])
+            last_race = last_race.merge(playoff_points, how='outer', on='Drivers')
+    
+            playoff_points['pos'] = playoff_points.index + 1
+            playoff_points = playoff_points.set_index('Drivers')
+            last_race['pos'] = last_race.index + 1
+            last_race = last_race.set_index('Drivers')        
             
-    def last_race_playoff_points(self):
-        s = Points(series=self.series, year=self.year)
-        last_race_num = self.num_races - 1
-        s.num_races = self.num_races
-        s.last_race_points = self.last_race_points
-        s.calc_playoff_points(last_race_num)     
-        self.last_race_playoff_points = s.playoff_points
-        
-    def playoff_points_delta(self):
-        playoff_points = self.playoff_points.copy()        
-        last_race = self.last_race_playoff_points.copy()
-        new_drivers = np.setdiff1d(playoff_points['Drivers'], last_race['Drivers'])
-        last_race = last_race.merge(playoff_points, how='outer', on='Drivers')
-
-        playoff_points['pos'] = playoff_points.index + 1
-        playoff_points = playoff_points.set_index('Drivers')
-        last_race['pos'] = last_race.index + 1
-        last_race = last_race.set_index('Drivers')        
-        
-        last_race['delta'] = last_race['pos'] - playoff_points['pos']
-        last_race['delta'].replace(to_replace=0, value=np.NaN, inplace=True)
-        last_race = last_race.reindex(self.playoff_points['Drivers'])
-        self.playoff_points['delta'] = np.array(last_race['delta'])
-        self.playoff_points.loc[self.playoff_points['Drivers'].isin(new_drivers), 'delta'] = 'New'
+            last_race['delta'] = last_race['pos'] - playoff_points['pos']
+            last_race['delta'].replace(to_replace=0, value=np.NaN, inplace=True)
+            last_race = last_race.reindex(self.playoff_points['Drivers'])
+            self.playoff_points['delta'] = np.array(last_race['delta'])
+            self.playoff_points.loc[self.playoff_points['Drivers'].isin(new_drivers), 'delta'] = 'New'
     
     def calc_stats(self, num_races=None, races=None):
         if num_races is None:
@@ -598,9 +617,6 @@ class Points():
         self.playoffs.replace(to_replace=0, value=np.NaN, inplace=True)
         return self.playoffs
 
-
-
-
     def finish_exists(self, race_num):
             conn = sqlite3.connect(self.database)
             c = conn.cursor()
@@ -614,7 +630,6 @@ class Points():
             c.close()
             conn.close()
             return exists
-
 
     def export_points(self):
         self.points.to_csv('tables/points.csv',
@@ -651,28 +666,42 @@ if __name__ == '__main__':
     now = dt.now()
     
     year = 2019
-    series = 3
+    series = 1
+    
+    reg = Points(series=series, year=year)
+    reg.get_races(26)
+    reg.calc_points()
+    reg.ties()
+    
+    last = Points(series=series, year=year)
+    last.get_races(35)      # this will need to take (p.num_races - 1)
+    last.calc_points()
+    last.ties()
+    last.calc_playoff_points(reg_season=reg)
+    last.playoff_points_ties()
     
     p = Points(series=series, year=year)
     p.get_races()   
     p.calc_points()
     p.ties()
-    p.last_race_points()
-    p.points_delta()
+    p.points_delta(last=last)
     p.playoff_drivers()
     p.cutoff()
-    p.calc_playoff_points()
+    p.calc_playoff_points(reg_season=reg)
     p.playoff_points_ties()
-    p.last_race_playoff_points()
-    p.playoff_points_delta()
+    p.playoff_points_delta(last=last)
     p.calc_stats()
     
-    a = p.calc_playoffs()
+    # a = p.calc_playoffs()s
 
 
     
-    p.export_points()
+    # p.export_points()
     print(dt.now() - now)
 
 
+# To Do:
+    
+     # calc_playoff_points().
+        # Remove if/else at beginning for num races?
 

@@ -133,7 +133,8 @@ class WebData:
             'cautions'     :self.json_dict['number_of_caution_segments'],
             'caution laps' :self.json_dict['number_of_caution_laps'],
             'lead changes' :self.json_dict['number_of_lead_changes'],
-            'leaders'      :self.json_dict['number_of_leaders']
+            'leaders'      :self.json_dict['number_of_leaders'],
+#            'avg_diff_1to3':self.json_dict['avg_diff_1to3']
             }
     
     def clean_driver_names(self):
