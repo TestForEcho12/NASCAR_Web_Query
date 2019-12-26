@@ -15,7 +15,9 @@ class Points():
         self.num_playoff_drivers = {1:16, 2:12, 3:8}[series]
         self.total_num_races = {1:36, 2:33, 3:23}[series]
         
-    def get_races(self, race_num=100):
+    def get_races(self, race_num=100, reg_season_len=False):
+        if reg_season_len:
+            race_num = self.num_regular_season_races
         conn = sqlite3.connect(self.database)
         df = pd.read_sql_query("""SELECT race_id, Races.track_id, race_number, Tracks.nickname FROM Races
                                    JOIN Tracks ON Races.track_id = Tracks.track_id
@@ -32,10 +34,8 @@ class Points():
             self.races = df.set_index('race_id')
             self.num_races = int(self.races['race_number'].max())
 
-    def calc_points(self, num_races=None):
-        if num_races is None:
-            num_races = self.num_races
-        if num_races == 0:
+    def calc_points(self):
+        if self.num_races == 0:
             self.points = None
             return
         
@@ -63,7 +63,7 @@ class Points():
                                      year = ? AND 
                                      Races.race_number <= ? AND
                                      ineligible IS NULL""",
-                               params=(self.series, self.year, num_races),
+                               params=(self.series, self.year, self.num_races),
                                con=conn)
         conn.close()
 
@@ -137,8 +137,9 @@ class Points():
             conn.close()
     
     def points_delta(self, last=None):
-        if last is None:
+        if last is None or last.points is None:
             self.points['delta'] = np.NaN
+            return
         else:
             points = self.points.copy()        
             last_race = last.points.copy()
@@ -154,12 +155,12 @@ class Points():
             last_race = last_race.reindex(self.points['Drivers'])
             self.points['delta'] = np.array(last_race['delta'])
 
-    def playoff_drivers(self, num_races=None):
+    def playoff_drivers(self):
         # Set num_races = to num regular season races
-        if num_races is None:
-            num_races = self.num_races
-        if num_races > self.num_regular_season_races:
+        if self.num_races > self.num_regular_season_races:
             num_races = self.num_regular_season_races
+        else:
+            num_races = self.num_races
             
         # Find eligible drivers that have run every race
         points_to_qual = {1:30, 2:30, 3:20}
@@ -219,18 +220,11 @@ class Points():
         else:
             self.points.loc[:, '+/- Cutoff'] = '-'
 
-    def calc_playoff_points(self, reg_season=None, num_races=None):
-        if num_races is None:
-            num_races = self.num_races
-            pts = self.points
-        elif num_races == self.num_races - 1:
-            pts = self.last_race_points
-        else:
-            s = Points(series=self.series, year=self.year)
-            s.calc_points(num_races)
-            s.ties()
-            pts = s.points
+    def calc_playoff_points(self, reg_season=None):
+        num_races = self.num_races
+        pts = self.points
         if num_races == 0:
+            self.playoff_points = None
             return
 
         conn = sqlite3.connect(self.database)    
@@ -296,6 +290,8 @@ class Points():
         self.playoff_points = self.playoff_points[cols]
         
     def playoff_points_ties(self):
+        if self.playoff_points is None:
+            return
         tied_points = self.playoff_points[self.playoff_points.duplicated(subset='Total Playoff Points', keep=False)]
         tied_points = tied_points['Total Playoff Points'].unique()
         pp_copy = self.playoff_points.copy()
@@ -316,8 +312,9 @@ class Points():
                 self.playoff_points.loc[index, 'pos'] = 'T-'+str(pos)   
         
     def playoff_points_delta(self, last=None):
-        if last is None:
+        if last is None or last.playoff_points is None:
             self.playoff_points['delta'] = np.NaN
+            return
         else:
             playoff_points = self.playoff_points.copy()        
             last_race = last.playoff_points.copy()
@@ -335,11 +332,9 @@ class Points():
             self.playoff_points['delta'] = np.array(last_race['delta'])
             self.playoff_points.loc[self.playoff_points['Drivers'].isin(new_drivers), 'delta'] = 'New'
     
-    def calc_stats(self, num_races=None, races=None):
-        if num_races is None:
-            num_races = self.num_races
-        if races is None:
-            races = self.races
+    def calc_stats(self):
+        num_races = self.num_races
+        races = self.races
         conn = sqlite3.connect(self.database)    
         df = pd.read_sql_query("""SELECT driver_name, 
                                   Results.race_id,
@@ -641,9 +636,9 @@ class Points():
         self.stats.to_csv('tables/stats.csv',
                           header=False,
                           index=False)
-        self.playoffs.to_csv('tables/playoffs.csv',
-                             header=False,
-                             index=False)
+        # self.playoffs.to_csv('tables/playoffs.csv',
+        #                      header=False,
+        #                      index=False)
         # Points Data
         with open('tables/data.txt', 'w') as writer:
             winners = self.eligible_winners.tolist()
@@ -669,19 +664,20 @@ if __name__ == '__main__':
     series = 1
     
     reg = Points(series=series, year=year)
-    reg.get_races(26)
+    reg.get_races(reg_season_len=True)
     reg.calc_points()
     reg.ties()
     
+    p = Points(series=series, year=year)
+    p.get_races()  
+    
     last = Points(series=series, year=year)
-    last.get_races(35)      # this will need to take (p.num_races - 1)
+    last.get_races(p.num_races - 1)
     last.calc_points()
     last.ties()
     last.calc_playoff_points(reg_season=reg)
     last.playoff_points_ties()
-    
-    p = Points(series=series, year=year)
-    p.get_races()   
+     
     p.calc_points()
     p.ties()
     p.points_delta(last=last)
@@ -692,11 +688,11 @@ if __name__ == '__main__':
     p.playoff_points_delta(last=last)
     p.calc_stats()
     
-    # a = p.calc_playoffs()s
+    # a = p.calc_playoffs()
 
 
     
-    # p.export_points()
+    p.export_points()
     print(dt.now() - now)
 
 
