@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import sqlite3
 from datetime import datetime as dt
+import excel
 
 pd.options.mode.chained_assignment = None
 
@@ -496,8 +497,9 @@ class Points():
                                WHERE series_id = ? AND 
                                      year = ? AND 
                                      Races.race_number > ? AND
+                                     Races.race_number <= ? AND
                                      ineligible IS NULL""",
-                               params=(self.series, self.year, self.num_regular_season_races),
+                               params=(self.series, self.year, self.num_regular_season_races, self.num_races),
                                con=conn)
         conn.close()
         
@@ -521,10 +523,11 @@ class Points():
         if current_round == 0:
             end_of_round = self.finish_exists(self.num_races)
             current_round = rounds
+            race_in_round = races_per_round
             finale = True
         else:
             finale = False
-        
+
         self.playoffs['playoff points'] = 0
         for i in range(current_round):
             remaining_drivers = self.playoffs.head(self.num_playoff_drivers - i*drivers_eliminated).index.to_series().rename('Drivers')
@@ -544,23 +547,47 @@ class Points():
             self.playoffs['playoff points'].iloc[:num_remaining_drivers] = pp.loc[remaining_drivers]['Total Playoff Points']
             # Sum points for round
             start = i*races_per_round
-            end = race_in_round
+            if i+1 == current_round:
+                end = start + race_in_round
+            else:
+                end = start + races_per_round
             points = self.playoffs.iloc[:num_remaining_drivers, start:end]
             if 'points' not in self.playoffs.columns:
                 self.playoffs['points'] = np.NaN
             self.playoffs['points'].iloc[:num_remaining_drivers] = 2000 + i*1000 + points.sum(axis=1)
             # Sum total points
             self.playoffs['total points'] = self.playoffs['points'] + self.playoffs['playoff points']
-            self.playoffs.sort_values('total points', ascending=False, inplace=True)
-
+            
+            # Check for winners in round
+            first = self.num_regular_season_races + 1 + i*races_per_round
+            last = first + races_per_round - 1
+            if last > self.num_races:
+                last = self.num_races
+            conn = sqlite3.connect(self.database)  
+            df = pd.read_sql_query("""SELECT driver_name
+                                   FROM Results
+                                   JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                                   JOIN Races ON Results.race_id = Races.race_id
+                                   WHERE series_id = ? AND 
+                                         year = ? AND 
+                                         Races.race_number BETWEEN ? AND ? AND
+                                         win = 1""",
+                                   params=(self.series, self.year, first, last),
+                                   con=conn)
+            conn.close()
+            winners = pd.Series(df['driver_name'].unique())
+            winners = winners[winners.isin(remaining_drivers)]
+            self.playoffs['win'] = 0
+            self.playoffs.loc[self.playoffs.index.isin(winners), 'win'] = 1
+            self.playoffs.sort_values(['win', 'total points'], ascending=False, inplace=True)
+            self.playoffs.drop('win', axis=1, inplace=True)
+            
             if end_of_round and i+1 == current_round:
                 # Reset points to X000
                 num_remaining_drivers -= drivers_eliminated
                 self.playoffs['points'].iloc[:num_remaining_drivers] = 2000 + (i+1)*1000
-                
                 # Update playoff points to include last round
-                remaining_drivers = self.playoffs.head(self.num_playoff_drivers - (i+1)*drivers_eliminated).index
-                num_remaining_drivers = remaining_drivers.size
+                remaining_drivers = self.playoffs.head(num_remaining_drivers).index
                 # Get remaining drivers's playoff points
                 pp = self.playoff_points[self.playoff_points['Drivers'].isin(remaining_drivers)]
                 pp.set_index('Drivers', inplace=True)
@@ -650,7 +677,8 @@ class Points():
                 writer.write(s)
             else:
                 writer.write('None\n')
-            writer.write(str(self.cut_line))
+            writer.write(str(self.cut_line) + '\n')
+            writer.write(str(self.num_races))
 
 
 
@@ -669,7 +697,7 @@ if __name__ == '__main__':
     reg.ties()
     
     p = Points(series=series, year=year)
-    p.get_races()  
+    p.get_races(31)  
     
     last = Points(series=series, year=year)
     last.get_races(p.num_races - 1)
@@ -688,16 +716,26 @@ if __name__ == '__main__':
     p.playoff_points_delta(last=last)
     p.calc_stats()
     
-    # a = p.calc_playoffs()
-
-
+    a = p.calc_playoffs()
     
-    p.export_points()
+    # p.export_points()
+    # exl = excel.v2(year, series)
+    # exl.run_all()
+    
+    
     print(dt.now() - now)
 
 
 # To Do:
     
-     # calc_playoff_points().
-        # Remove if/else at beginning for num races?
+    # Playoffs
+        # "Update playoff points for remaining drivers" has pandas error when races = 29
+    
+    # Playoff ties
+    
+    # Playoff delta
+    
+    
+    
+    # Manufactuer
 
