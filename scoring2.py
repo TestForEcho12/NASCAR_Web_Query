@@ -483,6 +483,9 @@ class Points():
         
         if self.num_races < self.num_regular_season_races:
             return
+        elif self.num_races == self.num_regular_season_races:
+            if not self.finish_exists(self.num_races):
+                return
 
         conn = sqlite3.connect(self.database)   
         df = pd.read_sql_query("""SELECT driver_name, 
@@ -510,6 +513,8 @@ class Points():
         self.playoffs = df.pivot(index='driver_name', columns='race_number', values='pts')
         self.playoffs = self.playoffs[self.playoffs.index.isin(self.playoff_drivers)]
         cols = self.playoffs.columns.tolist()
+        if self.playoffs.empty:
+            self.playoffs = pd.DataFrame(index=pd.Index(self.playoff_drivers, name='driver_name'))
 
         # Find where we are in the playoffs
         current_round = 0
@@ -645,21 +650,29 @@ class Points():
         self.playoffs['cutoff'] = np.NaN
         if (current_round == rounds and end_of_round) or finale:
             self.playoffs['cutoff'].iloc[:4] = '--'
+            self.playoff_round = current_round + 1
+            if finale and end_of_round:
+                self.playoff_winners = pd.Series(self.playoffs['driver_name'][0])
+            else:
+                self.playoff_winners = pd.Series()
         else:
             if end_of_round:
                 first_out = self.num_playoff_drivers - (current_round+1)*drivers_eliminated
                 last_in = first_out - 1
                 num_winners = 0
+                self.playoff_winners = pd.Series()
+                self.playoff_round = current_round + 1
             else:
                 first_out = self.num_playoff_drivers - current_round*drivers_eliminated
                 last_in = first_out - 1
                 num_winners = len(winners)
+                self.playoff_winners = winners
+                self.playoff_round = current_round
             first_out_pts = self.playoffs['total points'].iloc[first_out]
             last_in_pts = self.playoffs['total points'].iloc[last_in]
             self.playoffs['cutoff'].iloc[:last_in+1] = self.playoffs['total points'] - first_out_pts
             self.playoffs['cutoff'].iloc[first_out:first_out+drivers_eliminated] = self.playoffs['total points'] - last_in_pts
             self.playoffs['cutoff'].iloc[:num_winners] = '--'
-
         cols = ['pos', 'delta', 'driver_name', 'total points', 'cutoff', 'points', 'playoff points'] + cols
         self.playoffs = self.playoffs[cols]
         self.playoffs.replace(to_replace=0, value=np.NaN, inplace=True)
@@ -761,23 +774,28 @@ class Points():
         self.man_points = self.man_points[cols]
 
     def export_points(self):
-        self.points.to_csv('tables/points.csv',
-                           header=False,
-                           index=False)
-        self.playoff_points.to_csv('tables/playoff points.csv',
-                                   header=False,
-                                   index=False)
-        self.stats.to_csv('tables/stats.csv',
-                          header=False,
-                          index=False)
-        self.playoffs.to_csv('tables/playoffs.csv',
-                              header=False,
-                              index=False)
-        self.man_points.to_csv('tables/manufacturer.csv',
+        if hasattr(self, 'points'):
+            self.points.to_csv('tables/points.csv',
                                header=False,
                                index=False)
+        if hasattr(self, 'playoff_points'):
+            self.playoff_points.to_csv('tables/playoff points.csv',
+                                       header=False,
+                                       index=False)
+        if hasattr(self, 'stats'):
+            self.stats.to_csv('tables/stats.csv',
+                              header=False,
+                              index=False)
+        if hasattr(self, 'playoffs'):
+            self.playoffs.to_csv('tables/playoffs.csv',
+                                  header=False,
+                                  index=False)
+        if hasattr(self, 'man_points'):
+            self.man_points.to_csv('tables/manufacturer.csv',
+                                   header=False,
+                                   index=False)
         # Points Data
-        with open('tables/data.txt', 'w') as writer:
+        with open('tables/points_data.txt', 'w') as writer:
             winners = self.eligible_winners.tolist()
             if winners:
                 s = ''
@@ -790,7 +808,21 @@ class Points():
             writer.write(str(self.cut_line) + '\n')
             writer.write(str(self.num_races))
 
-
+        # Playoff Daat
+        with open('tables/playoff_data.txt', 'w') as writer:
+            if hasattr(self, 'playoffs'):
+                writer.write('True\n')
+                if not self.playoff_winners.empty:
+                    s = ''
+                    for driver in self.playoff_winners.tolist():
+                        s += driver + ','
+                    s = s[:-1] + '\n'
+                    writer.write(s)
+                else:
+                    writer.write('None\n')
+                writer.write(str(self.playoff_round))
+            else:
+                writer.write('False')
 
 
 
@@ -807,7 +839,7 @@ if __name__ == '__main__':
     reg.ties()
     
     p = Points(series=series, year=year)
-    p.get_races(5)  
+    p.get_races(33)  
     
     last = Points(series=series, year=year)
     last.get_races(p.num_races - 1)
@@ -843,14 +875,15 @@ if __name__ == '__main__':
 
 # To Do:
     
+    # Check playoff +/- cutoff works correctly for each round
+    # Add check if playoffs have started, else don't run excel function
+    
     # Playoffs
+        # Finale should only have points for finish. Remove stage points
         # Change position label for ties to be "T-#"
     
     # Playoff cutoff
         # Verify round changes are behaving correctly
-    
-    # Export points
-        # Error check: if attribute exists -> export, else -> pass
     
     # Manufactuer_delta
 
