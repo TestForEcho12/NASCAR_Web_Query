@@ -1,46 +1,46 @@
-import WebQuery3
+import WebQuery4
 import Database
 import excel
 import social
 import timer
 import practice2
+import scoring2
 
 
 def race():
-    year = 2019
-    series_id = 1
-    race_id = 4809
-    race_number = 35
-    stage_length = 75
-    col = 140
-    hashtags = ['#Bluegreen500', '#NASCARPlayoffs']
+    year = 2020
+    series_id = 2
+    race_id = 4970
+    race_number = 5
+    stage_length = 45
+    hashtags = ['#Toyota200', '#NASCAR']
     pause = 15
+    timer.run(timer.delay_start2(2020,5,21,16,30))
     
     # set up live feed web object
-    web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
+    web = WebQuery4.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
     
     # query object and return inital results
-    qry = WebQuery3.Query(web)
+    qry = WebQuery4.Query(web)
     qry.results()
     
     # Database object, load web object, add race and results to DB
     db = Database.Database()
     fetch = Database.Fetch()
+    
+    #**************Penalty*************
+    # db.add_penalty('Ricky Stenhouse Jr.', race_id, 10)
+    #**************Penalty*************
+    
+    # Update database
     db.web_query(web)
     db.update_drivers()
     db.update_tracks()
     db.add_race(year=year, race_number=race_number, stage_length=stage_length)
     db.add_results()
     
-    # Qual results to Excel
-    csv_col = str(col)
-    fetch.all_drivers(series=series_id, year=year)
-    fetch.ineligible_drivers(series=series_id, year=year)
-    fetch.results_to_csv(race_id=race_id, stage_id=-1, col=csv_col)
-    fetch.laps_to_csv(series=series_id, year=year)
-    
-    exl = excel.Excel(year=year, series=series_id)
-    exl.pre_race()
+    # Initialize scoring
+    v2 = scoring2.Score(series_id, year)
     
     # Set up live race position tracking
     live = Database.LiveRace()
@@ -56,58 +56,47 @@ def race():
     
     # Stage 1
     stage = 1
-    stage_lap = stage_length
-    csv_col = str(col + stage)
-    
+    stage_lap = qry.qry.race_status['stage_end']
     qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=pause)
     db.web_query(web)
     db.update_results(stage=stage)
     db.update_laps()
-    fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-    fetch.laps_to_csv(series=series_id, year=year)
     live.get_results()
     
-    exl.in_race()
+    v2.calc()
+    v2.export()
     
     twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
     tweet_id = twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
     reddit = social.reddit()
     comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
     reddit.comment(url_id=reddit_id, comment=comment)
-    
+
     
     # Stage 2
     stage = 2
-    stage_lap = stage_length*stage
+    qry.check_for_next_stage(stage_lap)
+    stage_lap = qry.qry.race_status['stage_end']
     qry.live_race(stage_lap=stage_lap, refresh=3, results_pause=pause)
     db.web_query(web)
     db.update_results(stage=stage)
     db.update_laps()
-    
-    print('Double checking Stage 1')
-    stage = 1
-    csv_col = str(col + stage)
-    web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=stage)
-    db.web_query(web)
-    db.update_results(stage=stage)
-    fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-    exl.results_from_csv()
-    web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
-    
-    stage = 2
-    csv_col = str(col + stage)
-    fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-    fetch.laps_to_csv(series=series_id, year=year)
     live.get_results()
     
-    exl.in_race()
+    print('Double checking Stage 1')
+    web1 = WebQuery4.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=1)
+    db.web_query(web1)
+    db.update_results(stage=1)
+    
+    v2.calc()
+    v2.export()
     
     twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
     tweet_id = twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
     reddit = social.reddit()
     comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
     reddit.comment(url_id=reddit_id, comment=comment)
-    
+
     
     # Finish
     stage = 0
@@ -116,31 +105,22 @@ def race():
     db.web_query(web)
     db.update_results(stage=stage)
     db.update_laps()
-    
-    print('Double checking Stage 2')
-    stage = 2
-    csv_col = str(col + stage)
-    web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=stage)
-    db.web_query(web)
-    db.update_results(stage=stage)
-    fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-    exl.results_from_csv()
-    web = WebQuery3.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=0)
-    
-    stage = 0
-    csv_col = str(col + 3)
-    fetch.results_to_csv(race_id=race_id, stage_id=stage, col=csv_col)
-    fetch.laps_to_csv(series=series_id, year=year)
     live.get_results()
     
-    exl.in_race()
+    print('Double checking Stage 2')
+    web2 = WebQuery4.WebData(year=year, series_id=series_id, race_id=race_id, feed_type=2)
+    db.web_query(web2)
+    db.update_results(stage=2)
+    
+    v2.calc()
+    v2.export()
     
     twitter = social.twitter(series=series_id, track=track, hashtags=hashtags)
     tweet_id = twitter.top_10_standings(name_list=qry.qry.name_list, stg=stage)
     reddit = social.reddit()
     comment = social.imgur_upload(stage=stage, name_list=qry.qry.name_list)
     reddit.comment(url_id=reddit_id, comment=comment)
-    
+
     
     # Post Race
     reddit_id = reddit.get_id(thread=2, series=series_id)
@@ -149,8 +129,9 @@ def race():
         twitter.manufacturer(tweet_id)
 
 
+
 def practice():
-    year = 2019
+    year = 2020
     series = 1
     race_id = 4807
     practice_id = 3
@@ -173,8 +154,6 @@ def practice():
     
     
 if __name__ == '__main__':
-    
-    timer.run(timer.delay_start2(2019,11,10,14,30))
     
     race()
 #    practice()

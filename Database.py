@@ -26,7 +26,6 @@ class Database:
                   stage3 INTEGER,
                   finish INTEGER,
                   laps_led INTEGER,
-                  win INTEGER,
                   ineligible INTEGER,
                   encumbered INTEGER,
                   penalty INTEGER,
@@ -69,9 +68,7 @@ class Database:
         
     def web_query(self, WebData):
         self.qry = WebData
-        self.qry.open_browser()
         self.qry.get_json()
-        self.qry.close_browser()
         self.qry.get_driver_info()
         self.qry.clean_driver_names()
         self.qry.get_race_info()
@@ -123,16 +120,13 @@ class Database:
         conn = sqlite3.connect('NASCAR.db')
         c = conn.cursor()     
         for driver in self.qry.driver_list:
-            # Check for win
-            if stage == 0 and driver['position'] == 1:
-                c.execute('UPDATE Results SET win=1 WHERE driver_id=? AND race_id=?',
-                          (driver['driver id'],
-                           self.qry.race_info['race id']))
+            # Update qual 
             if stage == -1:
                 c.execute('UPDATE Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
                           (driver['qual'], 
                            driver['driver id'], 
                            self.qry.race_info['race id']))    
+            # Update stages
             else:
                 c.execute('UPDATE Results SET {}=? WHERE driver_id=? AND race_id=?'.format(stages[stage]),
                           (driver['position'], 
@@ -150,7 +144,7 @@ class Database:
         # Update laps led in DB
         for driver in self.qry.driver_list:
             if not driver['laps led'] == None:
-                c.execute('UPDATE Results SET laps_led=? WHERE driver_id=? and race_id=?',
+                c.execute('UPDATE Results SET laps_led=? WHERE driver_id=? AND race_id=?',
                           (driver['laps led'],
                            driver['driver id'],
                            self.qry.race_info['race id']))
@@ -236,6 +230,19 @@ class Database:
             c.execute('UPDATE Races SET stage_length=? WHERE race_id=?',
                       (stage_length, 
                        self.qry.race_info['race id']))
+        conn.commit()
+        c.close()
+        conn.close()
+        
+    def add_penalty(self, name, race_id, points):
+        conn = sqlite3.connect('NASCAR.db')
+        c = conn.cursor()
+        c.execute('SELECT driver_id FROM Drivers WHERE driver_name=?',
+                  ([name]))
+        driver_id = c.fetchone()[0]
+        
+        c.execute('UPDATE Results SET penalty=? WHERE race_id=? AND driver_id=?',
+                     (points, race_id, driver_id))
         conn.commit()
         c.close()
         conn.close()

@@ -10,8 +10,8 @@ class Points():
     def __init__(self, series, year):
         self.series = series
         self.year = year
-        # self.database = 'NASCAR.db'
-        self.database = 'test.db'
+        self.database = 'NASCAR.db'
+        # self.database = 'test.db'
         self.num_regular_season_races = {1:26, 2:26, 3:16}[series]
         self.num_playoff_drivers = {1:16, 2:12, 3:10}[series]
         self.total_num_races = {1:36, 2:33, 3:23}[series]
@@ -210,6 +210,14 @@ class Points():
                                    con=conn)
             df = df.groupby('driver_name').size()        
             run_all = df.where(df==self.num_races).dropna().index.tolist()
+
+            # Check for waivers
+            df = pd.read_sql_query("""SELECT driver_name FROM Waivers
+                                      JOIN Drivers ON Waivers.driver_id = Drivers.driver_id
+                                      WHERE series_id = ? AND
+                                      YEAR = ?""", params=(self.series, self.year), con=conn)
+            run_all += df['driver_name'].tolist()
+            
             playoff_eligible = top.where(top.isin(run_all)).dropna()
             
             # Find winners
@@ -569,11 +577,16 @@ class Points():
             finale = False
 
         self.playoffs['playoff points'] = 0
+        num_remaining_drivers = self.num_playoff_drivers
         for i in range(current_round):
-            if current_round == 1 and self.series == 3:
+            if i == 1 and self.series == 3:
                 drivers_eliminated = 4
-            remaining_drivers = self.playoffs.head(self.num_playoff_drivers - i*drivers_eliminated).index.to_series().rename('Drivers')
-            num_remaining_drivers = remaining_drivers.size
+            elif self.series == 3:
+                drivers_eliminated = 2
+            if i != 0:
+                num_remaining_drivers -= drivers_eliminated
+            remaining_drivers = self.playoffs.head(num_remaining_drivers).index.to_series().rename('Drivers')
+            drivers_eliminated = {1:4, 2:4, 3:2}[self.series] # Reset for future rounds
 
             # Get remaining drivers's playoff points
             pp = self.playoff_points[self.playoff_points['Drivers'].isin(remaining_drivers)]
@@ -625,7 +638,6 @@ class Points():
             self.playoffs.sort_values('total points', ascending=False, inplace=True)
             self.playoff_ties(first, last)
             self.playoffs.sort_values('win', ascending=False, inplace=True)
-            self.playoffs.drop('win', axis=1, inplace=True)
             
             if end_of_round and i+1 == current_round:
                 # Reset points to X000
@@ -675,12 +687,19 @@ class Points():
             self.playoffs['points'].loc[remaining_drivers] = self.playoffs['total points'].loc[remaining_drivers]
             self.playoffs[self.num_races].loc[remaining_drivers] = final['pts']
             self.playoffs.sort_values('total points', ascending=False, inplace=True)
+        elif finale:
+            num_remaining_drivers -= drivers_eliminated
+            remaining_drivers = self.playoffs.head(num_remaining_drivers).index.to_series().rename('Drivers')
+            self.playoffs['points'].iloc[:num_remaining_drivers] = 2000 + (i+1)*1000
+            self.playoffs['total points'].iloc[:num_remaining_drivers] = self.playoffs['points'].iloc[:num_remaining_drivers]
+            self.playoffs[self.total_num_races] = np.NaN
             
         # Formatting
         self.playoffs.reset_index(inplace=True)
         self.playoffs['pos'] = self.playoffs.index + 1
         self.playoffs['delta'] = np.NaN
-        tied_points = self.playoffs[self.playoffs.duplicated(subset='total points', keep=False)]
+        tied_points = self.playoffs[self.playoffs['win'] != 1]
+        tied_points = tied_points[tied_points.duplicated(subset='total points', keep=False)]
         tied_points = tied_points['total points'].unique()
         for points in tied_points:
             tied_total = self.playoffs.loc[self.playoffs['total points'] == points]
@@ -689,11 +708,14 @@ class Points():
             indices = tied_total.index.tolist()
             for index in indices:
                 self.playoffs.loc[index, 'pos'] = 'T-'+str(pos)
+        self.playoffs.drop('win', axis=1, inplace=True)
         
         # Cutoff
         self.playoffs['cutoff'] = np.NaN
+        if self.series == 3 and current_round == 1:
+            drivers_eliminated += 2
         if (current_round == rounds and end_of_round) or finale:
-            self.playoffs['cutoff'].iloc[:4] = '--'
+            self.playoffs['cutoff'].iloc[:4] = '-'
             self.playoff_round = current_round + 1
             if finale and end_of_round:
                 self.playoff_winners = pd.Series(self.playoffs['driver_name'][0])
@@ -701,13 +723,15 @@ class Points():
                 self.playoff_winners = pd.Series(dtype=str)
         else:
             if end_of_round:
-                first_out = self.num_playoff_drivers - (current_round+1)*drivers_eliminated
+                # first_out = self.num_playoff_drivers - (current_round+1)*drivers_eliminated
+                first_out = num_remaining_drivers - drivers_eliminated
                 last_in = first_out - 1
                 num_winners = 0
                 self.playoff_winners = pd.Series(dtype=str)
                 self.playoff_round = current_round + 1
             else:
-                first_out = self.num_playoff_drivers - current_round*drivers_eliminated
+                # first_out = self.num_playoff_drivers - current_round*drivers_eliminated
+                first_out = num_remaining_drivers - drivers_eliminated
                 last_in = first_out - 1
                 num_winners = len(winners)
                 self.playoff_winners = winners
@@ -716,7 +740,7 @@ class Points():
             last_in_pts = self.playoffs['total points'].iloc[last_in]
             self.playoffs['cutoff'].iloc[:last_in+1] = self.playoffs['total points'] - first_out_pts
             self.playoffs['cutoff'].iloc[first_out:first_out+drivers_eliminated] = self.playoffs['total points'] - last_in_pts
-            self.playoffs['cutoff'].iloc[:num_winners] = '--'
+            self.playoffs['cutoff'].iloc[:num_winners] = '-'
         cols = ['pos', 'delta', 'driver_name', 'total points', 'cutoff', 'points', 'playoff points'] + cols
         self.playoffs = self.playoffs[cols]
         self.playoffs.replace(to_replace=0, value=np.NaN, inplace=True)
@@ -773,11 +797,11 @@ class Points():
     def finish_exists(self, race_num):
             conn = sqlite3.connect(self.database)
             c = conn.cursor()
-            c.execute("""SELECT EXISTS(SELECT finish FROM Results 
+            c.execute("""SELECT finish FROM Results 
                          JOIN Races ON Results.race_id = Races.race_id
                          WHERE series_id = ? AND
                          year = ? AND
-                         race_number = ?)""",
+                         race_number = ?""",
                         (self.series, self.year, race_num))
             exists = bool(c.fetchone()[0])
             c.close()
@@ -808,6 +832,7 @@ class Points():
         data = pd.concat(results_list)
         data.reset_index(drop=True, inplace=True)
         self.man_points = data.pivot(index='manufacturer', columns='race_number', values='pts')
+        self.man_points.replace(to_replace=0, value=np.NaN, inplace=True)
         cols = self.man_points.columns.values.tolist()
         self.man_points['Total Points'] = self.man_points.sum(axis=1)
         self.man_points.sort_values('Total Points', ascending=False, inplace=True)
@@ -865,7 +890,8 @@ class Points():
                 writer.write('None\n')
             writer.write(str(self.cut_line) + '\n')
             writer.write(str(self.num_races) + '\n')
-            writer.write(self.points_penalties)
+            writer.write(self.points_penalties + '\n')
+            writer.write(str(self.finish_exists(self.num_races)))
 
         # Playoff Data
         with open('tables/playoff_data.txt', 'w') as writer:
@@ -911,6 +937,10 @@ class Score ():
         self.last_race.manufacturer()
         
     def calc(self):
+        self.reg_season.calc_points()
+        self.reg_season.ties()
+        self.reg_season.get_playoff_drivers()
+        
         self.current_race.calc_points()
         self.current_race.ties()
         self.current_race.points_delta(last=self.last_race)
@@ -934,7 +964,7 @@ class Score ():
 
 if __name__ == '__main__':
     series = 1
-    year = 2019
+    year = 2020
     
     s = Score(series, year)
     s.calc()
@@ -942,9 +972,9 @@ if __name__ == '__main__':
 
 # To Do:
     
-    # Trucks:
-        # Increase playoff field
-    
     # Playoffs
-        # Check playoff +/- cutoff works correctly for each round
-        # Verify round changes are behaving correctly
+        # Trucks Cutoff
+            # At end of round 1, cutoff not quite right
+            
+    # Future goals
+        # Remove 'Points' from Playoffs, it's unnecessary
