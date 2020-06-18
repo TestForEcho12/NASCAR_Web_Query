@@ -41,31 +41,58 @@ class Points():
             return
         
         conn = sqlite3.connect(self.database)    
-        df = pd.read_sql_query("""SELECT driver_name, 
-                                   Races.race_number, 
-                                   (ifnull(s1.stage, 0) + 
-                                    ifnull(s2.stage, 0) + 
-                                    ifnull(s3.stage, 0) + 
-                                    (CASE
-                                        WHEN Races.race_number = 0 THEN
-                                            ifnull(f.stage, 0)
-                                        ELSE
-                                            ifnull(f.finish, 0)
-                                    END) -
-                                    ifnull(penalty, 0)) AS pts
-                               FROM Results
-                               JOIN Drivers ON Results.driver_id = Drivers.driver_id
-                               JOIN Races ON Results.race_id = Races.race_id
-                               LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
-                               LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
-                               LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
-                               LEFT OUTER JOIN Points AS f ON Results.finish = f.position
-                               WHERE series_id = ? AND 
-                                     year = ? AND 
-                                     Races.race_number <= ? AND
-                                     ineligible IS NULL""",
-                               params=(self.series, self.year, self.num_races),
-                               con=conn)
+        if self.series != 3:
+            df = pd.read_sql_query("""SELECT driver_name, 
+                                       Races.race_number, 
+                                       (ifnull(s1.stage, 0) + 
+                                        ifnull(s2.stage, 0) + 
+                                        ifnull(s3.stage, 0) + 
+                                        (CASE
+                                            WHEN Races.race_number = 0 THEN
+                                                ifnull(f.stage, 0)
+                                            ELSE
+                                                ifnull(f.finish, 0)
+                                        END) -
+                                        ifnull(penalty, 0)) AS pts
+                                   FROM Results
+                                   JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                                   JOIN Races ON Results.race_id = Races.race_id
+                                   LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
+                                   LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
+                                   LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
+                                   LEFT OUTER JOIN Points AS f ON Results.finish = f.position
+                                   WHERE series_id = ? AND 
+                                         year = ? AND 
+                                         Races.race_number <= ? AND
+                                         ineligible IS NULL""",
+                                   params=(self.series, self.year, self.num_races),
+                                   con=conn)
+        else:
+            df = pd.read_sql_query("""SELECT driver_name, 
+                                           Races.race_number, 
+                                           (ifnull(s1.stage, 0) + 
+                                            ifnull(s2.stage, 0) + 
+                                            ifnull(s3.stage, 0) + 
+                                            (CASE
+                                                WHEN Races.race_number = 0 THEN
+                                                    ifnull(f.stage, 0)
+                                                ELSE
+                                                    ifnull(f.truck_finish, 0)
+                                            END) -
+                                            ifnull(penalty, 0)) AS pts
+                                       FROM Results
+                                       JOIN Drivers ON Results.driver_id = Drivers.driver_id
+                                       JOIN Races ON Results.race_id = Races.race_id
+                                       LEFT OUTER JOIN Points AS s1 ON Results.stage1 = s1.position
+                                       LEFT OUTER JOIN Points AS s2 ON Results.stage2 = s2.position
+                                       LEFT OUTER JOIN Points AS s3 ON Results.stage3 = s3.position
+                                       LEFT OUTER JOIN Points AS f ON Results.finish = f.position
+                                       WHERE series_id = ? AND 
+                                             year = ? AND 
+                                             Races.race_number <= ? AND
+                                             ineligible IS NULL""",
+                                       params=(self.series, self.year, self.num_races),
+                                       con=conn)
         conn.close()
 
         # Group by driver
@@ -128,6 +155,7 @@ class Points():
                                        Races.race_number > 0""",
                                        params=(driver, self.series, self.year),
                                        con=conn)
+                df['finish'].fillna(value=np.nan, inplace=True)
                 finish = df['finish'].tolist()
                 finish.sort()
                 tie_dict[driver] = finish
@@ -963,7 +991,7 @@ class Score ():
 
 
 if __name__ == '__main__':
-    series = 1
+    series = 3
     year = 2020
     
     s = Score(series, year)
@@ -975,6 +1003,9 @@ if __name__ == '__main__':
     # Playoffs
         # Trucks Cutoff
             # At end of round 1, cutoff not quite right
+            
+    # Points tie breaker
+        # situation where there is a tie, but no finish results
             
     # Future goals
         # Remove 'Points' from Playoffs, it's unnecessary
